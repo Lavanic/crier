@@ -3,7 +3,9 @@ module github.com/Lavanic/crier
 go 1.26.4
 
 require (
+	github.com/gregdel/pushover v1.4.0
 	github.com/hashicorp/go-retryablehttp v0.7.8
+	golang.org/x/sync v0.21.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.53.0
 )
