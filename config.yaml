@@ -1,27 +1,33 @@
-# crier example config
-# copy me to the repo root as config.yaml and edit away
-# pushover creds do NOT go here, they go in config.local.yaml (gitignored):
+# crier production config
+# every slug below returned HTTP 200 on a live probe (2026-07-06).
+# pushover creds live in config.local.yaml, NOT here
 #
-#   pushover:
-#     app_token: your-app-token
-#     user_key: your-user-key
-#
-# or set CRIER_PUSHOVER_APP_TOKEN / CRIER_PUSHOVER_USER_KEY in the env,
-# env wins over files
+# coverage model: slugs are the fast lane (~60s latency) for companies
+# I care about. the github feeds are the dragnet that catches startups
+# I've never heard of, at their 5-30 min refresh lag. see a company
+# repeatedly in feed alerts? promote it to a slug
 
 db_path: crier.db
 
 filter:
+  # recall-first: I'd rather get pinged twice than miss one posting.
   # title passes if it matches ANY of these (go regexp syntax)
   include:
-    # the [\s,:()-]* lets punctuation sit between role and qualifier,
-    # real titles look like "Software Engineer, New Grad" with a comma
+    # role keyword + entry-level qualifier, punctuation allowed between
     - '(?i)(software\s+engineer|swe|sde|sw\s*eng|developer|programmer)[\s,:()-]*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)'
     - '(?i)new\s*grad.*software'
     - '(?i)software.*new\s*grad'
     - '(?i)entry[-\s]level.*(engineer|developer)'
     - '(?i)associate\s+software\s+engineer'
-  # ... and gets dropped if the title contains any of these (case-insensitive)
+    # anything that says new grad at all, even non-classic titles like
+    # "Forward Deployed Engineer - New Grad"
+    - '(?i)new\s*grad(uate)?'
+    # year-tagged roles like "Software Engineer (2027 Start)"
+    - '(?i)(software|engineer|developer|swe|sde).*\b202[67]\b'
+    # "University Graduate - Software Engineering" style titles
+    - '(?i)(university|campus|college)\s*(grad(uate)?|hire|recruit)'
+  # ...and gets dropped if it contains any of these whole words.
+  # this list is what keeps recall-first from becoming spam
   exclude_keywords:
     - intern
     - internship
@@ -37,17 +43,63 @@ filter:
     - phd
 
 sources:
-  # starter set of verified slugs, the full ~50 slug list lands in a
-  # later chunk once every client has passed its live smoke test
   greenhouse:
     - stripe
-    - anthropic
     - databricks
+    - airbnb
+    - doordashusa # plain "doordash" 404s now
+    - instacart
+    - coinbase
+    - anthropic
+    - scaleai
+    - figma
+    - cloudflare
+    - reddit
+    - discord
+    - airtable
+    - lyft
+    - affirm
+    - andurilindustries # not "anduril"
+    - spacex
+    - gusto
+    - twilio
+    - gitlab
+    - datadog
+    - roblox
+    - fireworksai # their ashby board 404s, greenhouse is live
+    - chime
+    - robinhood
+    - brex
+    - pinterest
+  # canva: 404 on lever AND greenhouse, no public board found, the
+  # github feeds cover them. boomsupersonic: 404 everywhere, dropped.
+  # rippling: uses their own ats, feeds cover them
   lever:
     - spotify
+    - mistral
+    - Coda # capital C matters, lowercase 404s
+    - palantir # "palantirtechnologies" on greenhouse 404s
   ashby:
     - ramp
     - linear
+    - vercel # valid board but 0 listed jobs as of 2026-07, expect the WARN
+    - supabase
+    - perplexity
+    - cursor
+    - replit
+    - notion # dual-listed w/ greenhouse, ashby is primary
+    - openai # same deal, ashby only so no double alerts
+    - cohere
+    - weaviate
+    - pinecone
+    - harvey
+    - sierra
+    - runway-ml # plain "runway" is a different fintech company
+    - modal
+    - anyscale
+    - langchain
+    - zapier
+    - plaid # lever board exists but is empty, ashby has the jobs
   github:
     - name: simplifyjobs
       url: https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json

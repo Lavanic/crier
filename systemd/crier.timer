@@ -1,0 +1,17 @@
+# fires crier.service every 30s. a timer + oneshot service instead of
+# a long-running daemon: survives crashes for free, journalctl gets
+# every run, and there's no in-process cron to babysit
+[Unit]
+Description=run crier every 30s
+
+[Timer]
+OnBootSec=10s
+# measured from when the service last STARTED, so ticks stay ~30s
+# apart even when a tick takes a few seconds
+OnUnitActiveSec=30s
+# default accuracy is 1 minute (!), systemd batches timers to save
+# power. we want the tick on time
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

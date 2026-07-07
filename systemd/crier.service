@@ -1,0 +1,21 @@
+# one poll tick. the timer fires this every 30s, Type=oneshot means
+# systemd waits for the run to finish and journals the exit code
+[Unit]
+Description=crier job alert poll tick
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=crier
+# config.yaml, config.local.yaml and crier.db all live here,
+# db_path in the config is relative on purpose
+WorkingDirectory=/opt/crier
+ExecStart=/usr/local/bin/crier
+
+# hardening, the process can only write inside /opt/crier
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/opt/crier
+ProtectHome=true
+PrivateTmp=true

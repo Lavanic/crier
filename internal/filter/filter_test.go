@@ -10,6 +10,9 @@ var include = []string{
 	`(?i)software.*new\s*grad`,
 	`(?i)entry[-\s]level.*(engineer|developer)`,
 	`(?i)associate\s+software\s+engineer`,
+	`(?i)new\s*grad(uate)?`,
+	`(?i)(software|engineer|developer|swe|sde).*\b202[67]\b`,
+	`(?i)(university|campus|college)\s*(grad(uate)?|hire|recruit)`,
 }
 
 var exclude = []string{
@@ -38,6 +41,10 @@ func TestMatch(t *testing.T) {
 		// the word-boundary case: contains "intern" inside
 		// "International" but must NOT be dropped
 		{"international is not intern", "New Grad Software Engineer, International Team", true},
+		// recall-first additions: over-ping beats missing one
+		{"nonstandard role new grad", "Forward Deployed Engineer - New Grad", true},
+		{"year tagged", "Software Engineer (2027 Start)", true},
+		{"university graduate", "University Graduate - Software Engineering", true},
 
 		// should stay silent
 		{"level two", "Software Engineer II", false},
@@ -48,6 +55,8 @@ func TestMatch(t *testing.T) {
 		{"new grad but staff", "Staff Software Engineer, New Grad Programs", false},
 		{"new grad but manager", "New Grad Software Engineering Manager", false},
 		{"co-op with hyphen", "New Grad Software Co-op", false},
+		// exclude list still guards the wide year pattern
+		{"year tagged but senior", "Senior Software Engineer (2027 Start)", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
