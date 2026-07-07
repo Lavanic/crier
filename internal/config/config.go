@@ -19,10 +19,14 @@ import (
 )
 
 type Config struct {
-	DBPath   string   `yaml:"db_path"`
-	Filter   Filter   `yaml:"filter"`
-	Sources  Sources  `yaml:"sources"`
-	Pushover Pushover `yaml:"pushover"`
+	DBPath  string  `yaml:"db_path"`
+	Filter  Filter  `yaml:"filter"`
+	Sources Sources `yaml:"sources"`
+	// pretty names for alert titles, slugs like "andurilindustries"
+	// read terribly on a lock screen. lookup only, dedup keys always
+	// use the raw slug so renaming here never re-alerts old jobs
+	DisplayNames map[string]string `yaml:"display_names"`
+	Pushover     Pushover          `yaml:"pushover"`
 }
 
 type Filter struct {
@@ -70,12 +74,29 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// overlay: unmarshaling into the SAME struct only touches keys
-	// present in the local file, everything else stays as loaded above
+	// the local overlay may ONLY hold creds. decoding it into the full
+	// Config would let a stray "sources:" key silently replace the
+	// entire slug list (yaml replaces whole lists), so it gets its own
+	// struct and any other top-level key is a hard error
 	local := filepath.Join(filepath.Dir(path), "config.local.yaml")
 	if _, err := os.Stat(local); err == nil {
-		if err := unmarshalFile(local, &cfg); err != nil {
+		var lc struct {
+			Pushover Pushover `yaml:"pushover"`
+		}
+		b, err := os.ReadFile(local)
+		if err != nil {
 			return nil, err
+		}
+		dec := yaml.NewDecoder(bytes.NewReader(b))
+		dec.KnownFields(true)
+		if err := dec.Decode(&lc); err != nil {
+			return nil, fmt.Errorf("%s (creds only, everything else goes in config.yaml): %w", local, err)
+		}
+		if lc.Pushover.AppToken != "" {
+			cfg.Pushover.AppToken = lc.Pushover.AppToken
+		}
+		if lc.Pushover.UserKey != "" {
+			cfg.Pushover.UserKey = lc.Pushover.UserKey
 		}
 	}
 

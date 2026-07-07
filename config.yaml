@@ -11,36 +11,76 @@ db_path: crier.db
 
 filter:
   # recall-first: I'd rather get pinged twice than miss one posting.
-  # title passes if it matches ANY of these (go regexp syntax)
+  # title passes if it matches ANY of these (go regexp syntax).
+  # this set was audited against 11,906 real titles from the seeded db,
+  # gains 243 real new-grad titles over the old set with 0 lost
   include:
-    # role keyword + entry-level qualifier, punctuation allowed between
-    - '(?i)(software\s+engineer|swe|sde|sw\s*eng|developer|programmer)[\s,:()-]*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)'
+    # role keyword + entry-level qualifier. the separator class allows
+    # commas, en/em dashes and slashes, real titles use all of them
+    # ("Software Engineer – Early Career" was invisible before)
+    - '(?i)(software\s+engineer|software\s+development\s+engineer|swe|sde|sw\s*eng|developer|programmer)[\s,:()\-–—/]*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)'
     - '(?i)new\s*grad.*software'
     - '(?i)software.*new\s*grad'
-    - '(?i)entry[-\s]level.*(engineer|developer)'
+    - '(?i)entry[-\s]level.*(engineer|developer|programmer)'
+    - '(?i)(engineer|developer|programmer).*entry[-\s]level'
     - '(?i)associate\s+software\s+engineer'
     # anything that says new grad at all, even non-classic titles like
     # "Forward Deployed Engineer - New Grad"
     - '(?i)new\s*grad(uate)?'
-    # year-tagged roles like "Software Engineer (2027 Start)"
+    # year-tagged roles, both orders ("Software Engineer (2027 Start)"
+    # and Anduril's "2026/2027 Early Career Software Engineer")
     - '(?i)(software|engineer|developer|swe|sde).*\b202[67]\b'
-    # "University Graduate - Software Engineering" style titles
+    - '(?i)\b202[67]\b.*(software|engineer|developer|swe|sde)'
     - '(?i)(university|campus|college)\s*(grad(uate)?|hire|recruit)'
+    # qualifier-first titles the old set missed entirely:
+    # "Graduate Software Engineer", TikTok's "ML Engineer Graduate",
+    # "Junior Software Engineer", "Early Career Software Engineer"
+    - '(?i)\bgrad(uate)?\b.*\b(software|engineer|developer|swe|sde|machine\s+learning)\b'
+    - '(?i)\b(software|engineer(ing)?|developer|swe|sde|machine\s+learning|technology)\b.*\bgrad(uate)?\b'
+    - '(?i)(\bjunior\b.*\b(engineer|developer|swe|sde)\b|\b(engineer|developer)\b.*\bjunior\b)'
+    - '(?i)early[\s-]+(in[\s-]+)?career'
+    - '(?i)recent\s+grad(uate)?'
+    - '(?i)emerging\s+talent'
+    - '(?i)\bbachelors?\b'
+    - '(?i)(leadership|technology|engineering|software|digital)\s+development\s+program'
+    - '(?i)(\bassociate\b.*\b(software|developer)\b|\b(software|developer)\b.*\bassociate\b|\bassociate\b\s+((ai|ml|machine\s+learning|deep\s+learning|data)\s+)+engineer\b)'
+    - '(?i)(\b(software|developer|engineer(ing)?|tech(nology)?)\b.*\b(apprentice(ship)?|residency|fellowship|rotation(al)?)\b|\b(apprentice(ship)?|residency|fellowship|rotation(al)?)\b.*\b(software|developer|engineer(ing)?|tech(nology)?)\b)'
+    # noisiest line: catches "Android Engineer I" at spotify and
+    # "ML Engineer 1" but also some hardware/field Engineer 1 roles.
+    # delete this one first if the pings get too spammy
+    - '(?i)\bengineer\b[\s,:()\-–—/]*(i|1)\b'
   # ...and gets dropped if it contains any of these whole words.
-  # this list is what keeps recall-first from becoming spam
+  # this list is what keeps recall-first from becoming spam.
+  # "staff" and "lead" are deliberately NOT here: they killed real
+  # postings ("Member of Technical Staff New Grad" at AI labs, a
+  # TikTok new-grad role on the Lead Ads team) and removing them
+  # admitted zero senior noise across the whole audited corpus
   exclude_keywords:
     - intern
     - internship
     - co-op
     - coop
     - senior
-    - staff
     - principal
-    - lead
     - manager
     - director
     - architect
     - phd
+
+# pretty names for alert titles (lock screen shows ~35 chars, slugs
+# read like spam). lookup only, dedup keys keep using the raw slug.
+# single lowercase words auto-capitalize (stripe -> Stripe), only the
+# weird ones need entries
+display_names:
+  andurilindustries: Anduril
+  doordashusa: DoorDash
+  scaleai: Scale AI
+  fireworksai: Fireworks AI
+  runway-ml: Runway
+  gitlab: GitLab
+  spacex: SpaceX
+  openai: OpenAI
+  langchain: LangChain
 
 sources:
   greenhouse:
@@ -105,6 +145,10 @@ sources:
       url: https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json
       # github raw cdn caches ~5 min, no point polling faster
       min_interval_seconds: 300
+    # heads up: this feed went stale 2026-04-25 (verified 2026-07-07),
+    # kept anyway since it costs one cached request per 5 min and may
+    # wake up for fall recruiting. New-Grad-2026 and cvrve/New-Grad
+    # redirect to this same repo, do NOT add them (double alerts)
     - name: vanshb03
       url: https://raw.githubusercontent.com/vanshb03/New-Grad-2027/dev/.github/scripts/listings.json
       min_interval_seconds: 300

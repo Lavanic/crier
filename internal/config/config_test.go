@@ -76,6 +76,25 @@ pushover:
 	}
 }
 
+func TestLocalOverlayRejectsNonCredKeys(t *testing.T) {
+	// a sources: key in the local file would silently replace the
+	// whole slug list (yaml replaces lists), so it must be an error
+	local := `
+pushover:
+  app_token: tok
+  user_key: usr
+sources:
+  greenhouse: [oops]
+`
+	_, err := Load(writeConfig(t, baseYAML, local))
+	if err == nil {
+		t.Fatal("local overlay with non-pushover keys should fail loudly")
+	}
+	if !strings.Contains(err.Error(), "creds only") {
+		t.Errorf("error %q should explain the creds-only rule", err)
+	}
+}
+
 func TestEnvBeatsFile(t *testing.T) {
 	local := "pushover: {app_token: filetok, user_key: fileusr}\n"
 	t.Setenv("CRIER_PUSHOVER_APP_TOKEN", "envtok")
