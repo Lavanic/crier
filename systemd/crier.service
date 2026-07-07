@@ -13,6 +13,19 @@ User=crier
 WorkingDirectory=/opt/crier
 ExecStart=/usr/local/bin/crier
 
+# CRITICAL: oneshot units have NO start timeout by default (infinity).
+# without this line one hung connection would wedge the unit in
+# "activating" forever and the timer would silently never fire again
+TimeoutStartSec=90
+
+# dead-man switch (recommended): create a free check at healthchecks.io
+# (period 1 min, grace 3 min), paste your ping url, uncomment both
+# lines. success pings on good ticks, /fail pings on bad ones, and
+# healthchecks pages you (its own pushover/email, works even if MY
+# pushover creds die) when pings stop entirely
+#ExecStartPost=-/usr/bin/curl -fsS -m 10 --retry 2 -o /dev/null https://hc-ping.com/YOUR-UUID
+#ExecStopPost=/bin/sh -c '[ "$$SERVICE_RESULT" = success ] || /usr/bin/curl -fsS -m 10 -o /dev/null https://hc-ping.com/YOUR-UUID/fail'
+
 # hardening, the process can only write inside /opt/crier
 NoNewPrivileges=true
 ProtectSystem=strict
