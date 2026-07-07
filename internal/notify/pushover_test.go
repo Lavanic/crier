@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/gregdel/pushover"
 
@@ -62,7 +63,7 @@ func TestNotifySendsEmergencyWithRetryAndURL(t *testing.T) {
 	fakePushover(t, &got)
 
 	n := New(testToken, testUser)
-	if err := n.Notify(testJob); err != nil {
+	if err := n.Notify(testJob, Emergency); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,7 +71,7 @@ func TestNotifySendsEmergencyWithRetryAndURL(t *testing.T) {
 		"token":     testToken,
 		"user":      testUser,
 		"title":     "stripe: Software Engineer, New Grad",
-		"message":   "San Francisco, CA",
+		"message":   "San Francisco, CA · greenhouse",
 		"priority":  "2",
 		"retry":     "30",
 		"expire":    "3600",
@@ -89,8 +90,7 @@ func TestNotifyNormalPrioritySkipsRetry(t *testing.T) {
 	fakePushover(t, &got)
 
 	n := New(testToken, testUser)
-	n.Priority = pushover.PriorityNormal
-	if err := n.Notify(testJob); err != nil {
+	if err := n.Notify(testJob, Normal); err != nil {
 		t.Fatal(err)
 	}
 	if got["priority"] != "0" {
@@ -102,20 +102,86 @@ func TestNotifyNormalPrioritySkipsRetry(t *testing.T) {
 	}
 }
 
-func TestNotifyTruncatesLongTitles(t *testing.T) {
+func TestNotifyTruncatesByRunesNotBytes(t *testing.T) {
 	var got map[string]string
 	fakePushover(t, &got)
 
 	long := testJob
-	long.Title = strings.Repeat("Very Long Title ", 30) // ~480 chars
+	// en dashes force multibyte boundaries, the old byte-slicing
+	// truncate shipped invalid utf-8 here
+	long.Title = strings.Repeat("Software – Engineer ", 30) // 600 runes
 	n := New(testToken, testUser)
-	if err := n.Notify(long); err != nil {
+	if err := n.Notify(long, Normal); err != nil {
 		t.Fatal(err)
 	}
-	if len(got["title"]) > 250 {
-		t.Errorf("title went out %d chars, pushover max is 250", len(got["title"]))
+	title := got["title"]
+	if utf8.RuneCountInString(title) > 250 {
+		t.Errorf("title is %d runes, pushover max is 250", utf8.RuneCountInString(title))
 	}
-	if !strings.HasSuffix(got["title"], "...") {
-		t.Errorf("truncated title should end in ..., got %q", got["title"][200:])
+	if !utf8.ValidString(title) {
+		t.Error("truncation produced invalid utf-8")
+	}
+	if !strings.HasSuffix(title, "…") {
+		t.Errorf("truncated title should end in …")
+	}
+}
+
+func TestNotifyGuardsBadURLs(t *testing.T) {
+	var got map[string]string
+	fakePushover(t, &got)
+	n := New(testToken, testUser)
+
+	// empty url: the lib errors on url_title-without-url, so both
+	// must be omitted rather than killing the alert
+	j := testJob
+	j.URL = ""
+	if err := n.Notify(j, Normal); err != nil {
+		t.Fatal(err)
+	}
+	if got["url"] != "" || got["url_title"] != "" {
+		t.Errorf("empty URL should omit url fields, got url=%q url_title=%q", got["url"], got["url_title"])
+	}
+
+	// oversize url (lib max 512): moved into the body, alert survives
+	j.URL = "https://example.com/" + strings.Repeat("x", 600)
+	if err := n.Notify(j, Normal); err != nil {
+		t.Fatal(err)
+	}
+	if got["url"] != "" {
+		t.Error("oversize URL should not be sent in the url field")
+	}
+	if !strings.Contains(got["message"], "https://example.com/") {
+		t.Error("oversize URL should land in the message body")
+	}
+}
+
+func TestNotifyCapsLocationList(t *testing.T) {
+	var got map[string]string
+	fakePushover(t, &got)
+
+	multi := testJob
+	multi.Location = "Winnipeg, MB | Toronto, ON | Kitchener, ON | Vancouver, BC"
+	n := New(testToken, testUser)
+	if err := n.Notify(multi, Normal); err != nil {
+		t.Fatal(err)
+	}
+	if want := "Winnipeg, MB, Toronto, ON +2 more · greenhouse"; got["message"] != want {
+		t.Errorf("message = %q, want %q", got["message"], want)
+	}
+}
+
+func TestSendDigest(t *testing.T) {
+	var got map[string]string
+	fakePushover(t, &got)
+
+	n := New(testToken, testUser)
+	if err := n.Send("12 new job matches", "Stripe ×3, Ramp +2 more", Emergency); err != nil {
+		t.Fatal(err)
+	}
+	if got["title"] != "12 new job matches" || got["priority"] != "2" {
+		t.Errorf("digest title/priority = %q/%q", got["title"], got["priority"])
+	}
+	if got["url"] != "" {
+		t.Error("digest should carry no url")
 	}
 }

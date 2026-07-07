@@ -1,7 +1,6 @@
 // Package store is crier's memory, a sqlite file with two tables:
 // jobs (every posting ever seen, keyed by DedupKey, this is the dedup)
-// and source_polls (when each source was last polled, so slow-cadence
-// sources like the github feeds can be skipped between ticks).
+// and source_polls (when each slow-cadence source was last polled).
 // the binary dies and restarts every 30s under systemd, this file is
 // the only thing that persists between ticks
 package store
@@ -19,7 +18,7 @@ import (
 	"github.com/Lavanic/crier/internal/sources"
 )
 
-const schema = `
+const schemaV1 = `
 CREATE TABLE IF NOT EXISTS jobs (
 	id            TEXT PRIMARY KEY,
 	company       TEXT NOT NULL,
@@ -37,14 +36,22 @@ CREATE TABLE IF NOT EXISTS source_polls (
 );
 `
 
+// migrations run in order at Open. sqlite's user_version pragma
+// remembers how far a db has gotten, so old dbs pick up new columns
+// on their next tick. append new entries, never edit old ones
+var migrations = []string{
+	schemaV1,
+	`ALTER TABLE jobs ADD COLUMN location TEXT NOT NULL DEFAULT ''`,
+}
+
 type Store struct {
 	db *sql.DB
 }
 
 func Open(path string) (*Store, error) {
 	// busy_timeout makes a second process wait 5s for the lock
-	// instead of erroring instantly, in case a slow tick overlaps
-	// the next one. WAL journal mode is the friendlier mode for that
+	// instead of erroring instantly, in case a manual run overlaps
+	// the timer. WAL journal mode is the friendlier mode for that
 	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)", path)
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -55,14 +62,35 @@ func Open(path string) (*Store, error) {
 	// of table-locked errors
 	db.SetMaxOpenConns(1)
 
-	if _, err := db.Exec(schema); err != nil {
+	var version int
+	if err := db.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("migrating schema: %w", err)
+		return nil, fmt.Errorf("reading schema version: %w", err)
+	}
+	for i := version; i < len(migrations); i++ {
+		if _, err := db.Exec(migrations[i]); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("migration %d: %w", i+1, err)
+		}
+		// pragma can't take ? placeholders, i+1 is our own int
+		if _, err := db.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, i+1)); err != nil {
+			db.Close()
+			return nil, fmt.Errorf("bumping schema version to %d: %w", i+1, err)
+		}
 	}
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
+
+// CountJobs is how main detects a fresh database (seed mode: mark
+// everything seen but send no alerts, so a new host can't carpet-bomb
+// the phone with hundreds of "new" postings)
+func (s *Store) CountJobs() (int64, error) {
+	var n int64
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM jobs`).Scan(&n)
+	return n, err
+}
 
 // MarkSeen records a job and reports whether it was new. the INSERT OR
 // IGNORE against the primary key IS the dedup: re-inserting a job we
@@ -70,9 +98,9 @@ func (s *Store) Close() error { return s.db.Close() }
 // on the same jobs forever
 func (s *Store) MarkSeen(j sources.Job, now time.Time) (bool, error) {
 	res, err := s.db.Exec(
-		`INSERT OR IGNORE INTO jobs (id, company, title, url, source, first_seen_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		j.DedupKey(), j.Company, j.Title, j.URL, j.Source, now.Unix(),
+		`INSERT OR IGNORE INTO jobs (id, company, title, url, source, location, first_seen_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		j.DedupKey(), j.Company, j.Title, j.URL, j.Source, j.Location, now.Unix(),
 	)
 	if err != nil {
 		return false, fmt.Errorf("mark seen %s: %w", j.DedupKey(), err)
@@ -84,13 +112,49 @@ func (s *Store) MarkSeen(j sources.Job, now time.Time) (bool, error) {
 	return n == 1, nil
 }
 
-// MarkNotified stamps when the alert actually went out. lets us tell
-// "seen and alerted" apart from "seen while alerts were failing"
+// MarkNotified stamps a job as handled. "handled" means alerted for
+// real, or logged in dry-run, or suppressed during a seed run. rows
+// WITHOUT this stamp are the retry queue (see UnnotifiedSince)
 func (s *Store) MarkNotified(dedupKey string, now time.Time) error {
 	_, err := s.db.Exec(
 		`UPDATE jobs SET notified_at = ? WHERE id = ?`, now.Unix(), dedupKey,
 	)
 	return err
+}
+
+// PendingAlert is a job that was seen but never successfully alerted,
+// e.g. pushover was down or the tick got cut off mid-run. Key carries
+// the original dedup key since Job.JobID isn't stored separately
+type PendingAlert struct {
+	Key string
+	Job sources.Job
+}
+
+// UnnotifiedSince returns recent seen-but-never-alerted jobs. this is
+// the safety net that turns "pushover hiccuped, alert lost forever"
+// into "alert arrives one tick late". main re-runs the filter on
+// these, so filtered-out jobs (notified_at NULL too) don't resurface
+// unless the filter now wants them
+func (s *Store) UnnotifiedSince(since time.Time) ([]PendingAlert, error) {
+	rows, err := s.db.Query(
+		`SELECT id, company, title, url, source, location FROM jobs
+		 WHERE notified_at IS NULL AND first_seen_at >= ?`, since.Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []PendingAlert
+	for rows.Next() {
+		var p PendingAlert
+		if err := rows.Scan(&p.Key, &p.Job.Company, &p.Job.Title,
+			&p.Job.URL, &p.Job.Source, &p.Job.Location); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // LastPolled returns when a source was last polled. ok=false means

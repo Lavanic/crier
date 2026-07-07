@@ -6,8 +6,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gregdel/pushover"
-
 	"github.com/Lavanic/crier/internal/sources"
 )
 
@@ -24,7 +22,6 @@ func TestSmokePushover(t *testing.T) {
 	}
 
 	n := New(token, user)
-	n.Priority = pushover.PriorityNormal
 	err := n.Notify(sources.Job{
 		Source:   "smoke-test",
 		Company:  "crier",
@@ -32,7 +29,7 @@ func TestSmokePushover(t *testing.T) {
 		Title:    "test alert, plumbing works",
 		Location: "your phone :)",
 		URL:      "https://github.com/Lavanic/crier",
-	})
+	}, Normal)
 	if err != nil {
 		t.Fatalf("live pushover send failed: %v", err)
 	}
