@@ -14,7 +14,9 @@ db_path: crier.db
 filter:
   # title passes if it matches ANY of these (go regexp syntax)
   include:
-    - '(?i)(software\s+engineer|swe|sde|sw\s*eng|developer|programmer)\s*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)'
+    # the [\s,:()-]* lets punctuation sit between role and qualifier,
+    # real titles look like "Software Engineer, New Grad" with a comma
+    - '(?i)(software\s+engineer|swe|sde|sw\s*eng|developer|programmer)[\s,:()-]*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)'
     - '(?i)new\s*grad.*software'
     - '(?i)software.*new\s*grad'
     - '(?i)entry[-\s]level.*(engineer|developer)'
