@@ -18,7 +18,8 @@ const ashbySample = `{
 			"location": "New York",
 			"isListed": true,
 			"isRemote": false,
-			"jobUrl": "https://jobs.ashbyhq.com/ramp/f0e1d2c3"
+			"jobUrl": "https://jobs.ashbyhq.com/ramp/f0e1d2c3",
+			"applyUrl": "https://jobs.ashbyhq.com/ramp/f0e1d2c3/application"
 		},
 		{
 			"id": "00000000-1111-2222-3333-444444444444",
@@ -53,7 +54,26 @@ func TestAshbyFetchMapsAndFiltersUnlisted(t *testing.T) {
 	if j.Title != "Software Engineer - New Grad (2027)" {
 		t.Errorf("Title = %q", j.Title)
 	}
+	// applyUrl preferred over jobUrl, one less tap to the form
+	if j.URL != "https://jobs.ashbyhq.com/ramp/f0e1d2c3/application" {
+		t.Errorf("URL = %q, want the applyUrl", j.URL)
+	}
 	if j.DedupKey() != "ashby:ramp:f0e1d2c3-aaaa-bbbb-cccc-ddddeeeeffff" {
 		t.Errorf("DedupKey = %q", j.DedupKey())
+	}
+}
+
+func TestAshbyErrorsOnMissingIDs(t *testing.T) {
+	// a renamed id field must fail the fetch, not quietly collapse
+	// every posting into one dedup key
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"jobs": [{"title": "Ghost", "isListed": true, "jobUrl": "https://x"}]}`))
+	}))
+	defer srv.Close()
+
+	a := NewAshby(NewHTTPClient(), "ramp")
+	a.baseURL = srv.URL
+	if _, err := a.Fetch(context.Background()); err == nil {
+		t.Fatal("expected schema-drift error for empty ids")
 	}
 }

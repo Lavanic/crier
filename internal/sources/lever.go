@@ -33,11 +33,13 @@ func (l *Lever) Name() string { return "lever:" + l.slug }
 // poll every tick
 func (l *Lever) MinInterval() time.Duration { return 0 }
 
-// wire format. "text" is what lever calls the job title
+// wire format. "text" is what lever calls the job title. applyUrl is
+// hostedUrl + /apply, the actual form instead of the description page
 type leverPosting struct {
 	ID         string `json:"id"`
 	Text       string `json:"text"`
 	HostedURL  string `json:"hostedUrl"`
+	ApplyURL   string `json:"applyUrl"`
 	Categories struct {
 		Location string `json:"location"`
 	} `json:"categories"`
@@ -51,13 +53,22 @@ func (l *Lever) Fetch(ctx context.Context) ([]Job, error) {
 	}
 	jobs := make([]Job, 0, len(postings))
 	for _, p := range postings {
+		// empty ids all collide into one dedup key and silently eat
+		// the whole board, treat schema drift as a hard error
+		if p.ID == "" {
+			return nil, fmt.Errorf("lever %s: posting with empty id, schema drift?", l.slug)
+		}
+		link := p.ApplyURL
+		if link == "" {
+			link = p.HostedURL
+		}
 		jobs = append(jobs, Job{
 			Source:   "lever",
 			Company:  l.slug,
 			JobID:    p.ID,
 			Title:    p.Text,
 			Location: p.Categories.Location,
-			URL:      p.HostedURL,
+			URL:      link,
 		})
 	}
 	return jobs, nil

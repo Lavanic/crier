@@ -36,13 +36,16 @@ func (a *Ashby) Name() string { return "ashby:" + a.slug }
 func (a *Ashby) MinInterval() time.Duration { return 0 }
 
 // wire format. location is a plain string here, and jobs that are
-// unlisted still show up in some tenants so we check isListed
+// unlisted still show up in some tenants so we check isListed.
+// applyUrl deep-links the application form (jobUrl + /application),
+// one less tap than the description page
 type ashbyResponse struct {
 	Jobs []struct {
 		ID       string `json:"id"`
 		Title    string `json:"title"`
 		Location string `json:"location"`
 		JobURL   string `json:"jobUrl"`
+		ApplyURL string `json:"applyUrl"`
 		IsListed bool   `json:"isListed"`
 	} `json:"jobs"`
 }
@@ -58,13 +61,22 @@ func (a *Ashby) Fetch(ctx context.Context) ([]Job, error) {
 		if !j.IsListed {
 			continue
 		}
+		// empty ids would all collide into one dedup key and silently
+		// eat the whole board, treat schema drift as a hard error
+		if j.ID == "" {
+			return nil, fmt.Errorf("ashby %s: posting with empty id, schema drift?", a.slug)
+		}
+		link := j.ApplyURL
+		if link == "" {
+			link = j.JobURL
+		}
 		jobs = append(jobs, Job{
 			Source:   "ashby",
 			Company:  a.slug,
 			JobID:    j.ID,
 			Title:    j.Title,
 			Location: j.Location,
-			URL:      j.JobURL,
+			URL:      link,
 		})
 	}
 	return jobs, nil

@@ -54,9 +54,16 @@ func (f *GitHubFeed) Fetch(ctx context.Context) ([]Job, error) {
 		return nil, fmt.Errorf("github feed %s: %w", f.name, err)
 	}
 	jobs := make([]Job, 0, len(listings))
+	skipped := 0
 	for _, l := range listings {
 		// only drop when the feed explicitly says so
 		if (l.Active != nil && !*l.Active) || (l.IsVisible != nil && !*l.IsVisible) {
+			continue
+		}
+		// volunteer-maintained json: skip individual junk rows, but if
+		// EVERY row lost its id the schema drifted, fail the feed
+		if l.ID == "" || l.Title == "" {
+			skipped++
 			continue
 		}
 		jobs = append(jobs, Job{
@@ -67,6 +74,9 @@ func (f *GitHubFeed) Fetch(ctx context.Context) ([]Job, error) {
 			Location: strings.Join(l.Locations, " | "),
 			URL:      l.URL,
 		})
+	}
+	if len(listings) > 0 && len(jobs) == 0 && skipped > 0 {
+		return nil, fmt.Errorf("github feed %s: all %d rows missing id/title, schema drift?", f.name, skipped)
 	}
 	return jobs, nil
 }

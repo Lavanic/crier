@@ -61,6 +61,11 @@ func (g *Greenhouse) Fetch(ctx context.Context) ([]Job, error) {
 	}
 	jobs := make([]Job, 0, len(resp.Jobs))
 	for _, j := range resp.Jobs {
+		// a renamed id field would decode every job as id 0, collide
+		// all dedup keys and silently eat the board. fail loud instead
+		if j.ID == 0 {
+			return nil, fmt.Errorf("greenhouse %s: posting with zero id, schema drift?", g.slug)
+		}
 		jobs = append(jobs, Job{
 			Source:   "greenhouse",
 			Company:  g.slug,

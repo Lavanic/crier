@@ -13,6 +13,7 @@ const leverSample = `[
 		"id": "a1b2c3d4-1111-2222-3333-444455556666",
 		"text": "Backend Engineer, Early Career",
 		"hostedUrl": "https://jobs.lever.co/spotify/a1b2c3d4",
+		"applyUrl": "https://jobs.lever.co/spotify/a1b2c3d4/apply",
 		"categories": {
 			"location": "New York, NY",
 			"team": "Platform",
@@ -50,6 +51,10 @@ func TestLeverFetchMapsJobs(t *testing.T) {
 	}
 	if j.Location != "New York, NY" {
 		t.Errorf("Location = %q", j.Location)
+	}
+	// applyUrl preferred over hostedUrl, lands on the actual form
+	if j.URL != "https://jobs.lever.co/spotify/a1b2c3d4/apply" {
+		t.Errorf("URL = %q, want the applyUrl", j.URL)
 	}
 	if j.DedupKey() != "lever:spotify:a1b2c3d4-1111-2222-3333-444455556666" {
 		t.Errorf("DedupKey = %q", j.DedupKey())
