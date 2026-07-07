@@ -1,0 +1,19 @@
+# binaries
+/crier
+/dist/
+
+# secrets, never commit the pushover creds
+.env
+config.local.yaml
+
+# runtime state (sqlite makes the -wal/-shm/-journal sidecars on its own)
+crier.db
+crier.db-journal
+crier.db-wal
+crier.db-shm
+
+# editor / os noise
+.idea/
+.vscode/
+*.swp
+.DS_Store
