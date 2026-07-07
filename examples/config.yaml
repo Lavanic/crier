@@ -1,0 +1,56 @@
+# crier example config
+# copy me to the repo root as config.yaml and edit away
+# pushover creds do NOT go here, they go in config.local.yaml (gitignored):
+#
+#   pushover:
+#     app_token: your-app-token
+#     user_key: your-user-key
+#
+# or set CRIER_PUSHOVER_APP_TOKEN / CRIER_PUSHOVER_USER_KEY in the env,
+# env wins over files
+
+db_path: crier.db
+
+filter:
+  # title passes if it matches ANY of these (go regexp syntax)
+  include:
+    - '(?i)(software\s+engineer|swe|sde|sw\s*eng|developer|programmer)\s*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)'
+    - '(?i)new\s*grad.*software'
+    - '(?i)software.*new\s*grad'
+    - '(?i)entry[-\s]level.*(engineer|developer)'
+    - '(?i)associate\s+software\s+engineer'
+  # ... and gets dropped if the title contains any of these (case-insensitive)
+  exclude_keywords:
+    - intern
+    - internship
+    - co-op
+    - coop
+    - senior
+    - staff
+    - principal
+    - lead
+    - manager
+    - director
+    - architect
+    - phd
+
+sources:
+  # starter set of verified slugs, the full ~50 slug list lands in a
+  # later chunk once every client has passed its live smoke test
+  greenhouse:
+    - stripe
+    - anthropic
+    - databricks
+  lever:
+    - spotify
+  ashby:
+    - ramp
+    - linear
+  github:
+    - name: simplifyjobs
+      url: https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json
+      # github raw cdn caches ~5 min, no point polling faster
+      min_interval_seconds: 300
+    - name: vanshb03
+      url: https://raw.githubusercontent.com/vanshb03/New-Grad-2027/dev/.github/scripts/listings.json
+      min_interval_seconds: 300
