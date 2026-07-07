@@ -12,6 +12,29 @@ import (
 	"time"
 )
 
+func TestSmokeGitHubFeeds(t *testing.T) {
+	client := NewHTTPClient()
+	feeds := map[string]string{
+		"simplifyjobs": "https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json",
+		"vanshb03":     "https://raw.githubusercontent.com/vanshb03/New-Grad-2027/dev/.github/scripts/listings.json",
+	}
+	for name, url := range feeds {
+		t.Run(name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			jobs, err := NewGitHubFeed(client, name, url, 5*time.Minute).Fetch(ctx)
+			if err != nil {
+				t.Fatalf("live fetch failed: %v", err)
+			}
+			if len(jobs) == 0 {
+				t.Fatal("0 active jobs in the whole aggregator, suspicious")
+			}
+			t.Logf("%d active jobs, first: %q at %s", len(jobs), jobs[0].Title, jobs[0].Company)
+		})
+	}
+}
+
 func TestSmokeAshby(t *testing.T) {
 	client := NewHTTPClient()
 	for _, slug := range []string{"ramp", "linear"} {
