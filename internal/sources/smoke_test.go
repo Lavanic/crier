@@ -1,0 +1,34 @@
+//go:build smoke
+
+// live tests that hit the real endpoints, run with `make smoke`.
+// kept behind a build tag so plain `go test ./...` never touches
+// the network
+
+package sources
+
+import (
+	"context"
+	"testing"
+	"time"
+)
+
+func TestSmokeGreenhouse(t *testing.T) {
+	client := NewHTTPClient()
+	for _, slug := range []string{"stripe", "anthropic"} {
+		t.Run(slug, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			jobs, err := NewGreenhouse(client, slug).Fetch(ctx)
+			if err != nil {
+				t.Fatalf("live fetch failed: %v", err)
+			}
+			// zero jobs from stripe or anthropic means something is off
+			// (bad slug, api change), treat it as a failure
+			if len(jobs) == 0 {
+				t.Fatal("0 jobs returned, suspicious for this company")
+			}
+			t.Logf("%d jobs, first: %q (%s)", len(jobs), jobs[0].Title, jobs[0].Location)
+		})
+	}
+}
