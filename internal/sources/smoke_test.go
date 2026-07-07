@@ -12,6 +12,25 @@ import (
 	"time"
 )
 
+func TestSmokeLever(t *testing.T) {
+	client := NewHTTPClient()
+	for _, slug := range []string{"spotify"} {
+		t.Run(slug, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			jobs, err := NewLever(client, slug).Fetch(ctx)
+			if err != nil {
+				t.Fatalf("live fetch failed: %v", err)
+			}
+			if len(jobs) == 0 {
+				t.Fatal("0 jobs returned, suspicious for this company")
+			}
+			t.Logf("%d jobs, first: %q (%s)", len(jobs), jobs[0].Title, jobs[0].Location)
+		})
+	}
+}
+
 func TestSmokeGreenhouse(t *testing.T) {
 	client := NewHTTPClient()
 	for _, slug := range []string{"stripe", "anthropic"} {
