@@ -32,9 +32,10 @@ import (
 	"github.com/Lavanic/crier/internal/store"
 )
 
-// cap on in-flight http requests so a big slug list doesn't open
-// 50 sockets at once
-const maxConcurrent = 20
+// cap on in-flight http requests. 40 keeps the 125-source fan-out to
+// ~3 waves so the last wave's matches aren't waiting on the first,
+// still gentle on the cdn-fronted apis
+const maxConcurrent = 40
 
 // a tick has to finish well before systemd fires the next one at 30s.
 // sources that miss the deadline get cut off, not waited on
