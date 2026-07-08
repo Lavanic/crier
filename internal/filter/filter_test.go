@@ -33,6 +33,7 @@ var include = []string{
 var exclude = []string{
 	"intern", "internship", "co-op", "coop", "senior",
 	"principal", "manager", "director", "architect", "phd",
+	"recruiter", "coordinator",
 }
 
 func TestMatch(t *testing.T) {
@@ -82,6 +83,10 @@ func TestMatch(t *testing.T) {
 		{"co-op with hyphen", "New Grad Software Co-op", false},
 		// exclude list still guards the wide year pattern
 		{"year tagged but senior", "Senior Software Engineer (2027 Start)", false},
+		// hr roles kept matching the early-career patterns until
+		// recruiter/coordinator joined the excludes
+		{"recruiter", "Early Careers Recruiter", false},
+		{"coordinator", "Campus Attraction & Events Coordinator", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
