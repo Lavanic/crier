@@ -1,9 +1,14 @@
+<p align="center">
+  <img src="assets/town_crier.jpg" alt="a town crier ringing his bell" width="300">
+</p>
+
 # crier
 
-A single-binary Go bot that watches ~50 tech company job boards and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. I'm just getting paged like an on-call so it punches through DnD, and tapping it opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
+A single-binary Go bot that watches 125 sources (123 Greenhouse/Lever/Ashby
+company boards + 2 aggregator feeds) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. I'm just getting paged like an on-call so it punches through DnD, and tapping it opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
 
 ```
-systemd timer (every 30s on a $5 vps)
+systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
        ├─ fan out: greenhouse / lever / ashby boards + 2 aggregator feeds
        ├─ filter:  include regexes + exclude keywords (title only)
@@ -43,7 +48,7 @@ job counts as new, and you do not want ~500 emergency alerts.
 
 ## Deploy
 
-Any Linux box with systemd works. I use a Hetzner CX22 in Ashburn.
+Any Linux box with systemd works. I use a $4 DigitalOcean droplet in NYC.
 
 ```sh
 make deploy DEPLOY_HOST=root@your.server.ip
@@ -84,8 +89,8 @@ comments record the traps (DoorDash is `doordashusa`, Lever's `Coda` is
 case-sensitive, plain `runway` is a different company, and so on).
 
 Filters are title-only regexes, tuned recall-first: I would rather get pinged
-twice than miss one posting. The `exclude_keywords` list (senior, staff,
-intern, ...) matches whole words only, so "International" does not trip
+twice than miss one posting. The `exclude_keywords` list (senior, intern,
+recruiter, ...) matches whole words only, so "International" does not trip
 "intern".
 
 ## Operational notes
