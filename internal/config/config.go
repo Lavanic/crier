@@ -34,6 +34,16 @@ type Filter struct {
 	// and contains NO exclude keyword
 	Include         []string `yaml:"include"`
 	ExcludeKeywords []string `yaml:"exclude_keywords"`
+	// raw regexes run against title AND url, for stuff like start
+	// dates that only show up in workday url slugs
+	ExcludePatterns []string `yaml:"exclude_patterns"`
+	// non-us markers. a posting dies only if every listed location
+	// matches one of these
+	ExcludeLocations []string `yaml:"exclude_locations"`
+	// feed category tags to drop (product, hardware), with rescue
+	// keywords that let software-sounding titles through anyway
+	ExcludeCategories      []string `yaml:"exclude_categories"`
+	CategoryRescueKeywords []string `yaml:"category_rescue_keywords"`
 }
 
 type Sources struct {
@@ -156,6 +166,11 @@ func (c *Config) validate() error {
 	for _, pat := range c.Filter.Include {
 		if _, err := regexp.Compile(pat); err != nil {
 			return fmt.Errorf("bad include pattern %q: %w", pat, err)
+		}
+	}
+	for _, pat := range c.Filter.ExcludePatterns {
+		if _, err := regexp.Compile(pat); err != nil {
+			return fmt.Errorf("bad exclude pattern %q: %w", pat, err)
 		}
 	}
 	for _, f := range c.Sources.GitHub {

@@ -72,6 +72,86 @@ filter:
     # patterns ("Early Careers Recruiter"), zero real swe titles lost
     - recruiter
     - coordinator
+    - sr
+    # wrong-discipline junk from the 2026-07 audit of 108 real alerts,
+    # each keyword checked against all 25k seen titles for collateral
+    - field service
+    - field engineer
+    - sales engineer
+    - technical support
+    - propulsion
+    - mechanical
+    - machining
+    - manufacturing
+    # NOT plain "production", that kills real titles like "SWE New Grad,
+    # Production Infrastructure"
+    - production engineer
+    - process development
+    - trainer
+    - gnc
+    - asic
+    - power platform
+    - product operations
+    - configuration management
+    - hvac
+    - uipath
+    - robotic process automation
+  # raw regexes checked against the title AND the url, workday slugs
+  # leak start dates. tune the year range to your own graduation date
+  exclude_patterns:
+    - '(?i)\b202[0-6][\s_-]*start\b'
+  # a posting dies only if EVERY listed location matches one of these,
+  # "Toronto | SF" survives and empty/unknown locations always pass
+  exclude_locations:
+    - canada
+    - ontario
+    - alberta
+    - british columbia
+    - toronto
+    - ottawa
+    - vancouver
+    - montreal
+    - uk
+    - united kingdom
+    - london
+    - ireland
+    - dublin
+    - india
+    - bangalore
+    - bengaluru
+    - hyderabad
+    - europe
+    - emea
+    - apac
+    - germany
+    - france
+    - paris
+    - netherlands
+    - amsterdam
+    - poland
+    - spain
+    - singapore
+    - japan
+    - tokyo
+    - australia
+    - sydney
+    - china
+    - taiwan
+    - israel
+    - tel aviv
+    - brazil
+    - mexico
+  # simplify feed discipline tags to drop, matched as substrings so
+  # legacy "Hardware Engineering" counts. boards have no tag, always pass
+  exclude_categories:
+    - product
+    - hardware
+  # ...except simplify files firmware/embedded roles under Hardware,
+  # a title with one of these words beats the category
+  category_rescue_keywords:
+    - software
+    - firmware
+    - embedded
 
 # pretty names for alert titles (lock screen shows ~35 chars, slugs
 # read like spam). lookup only, dedup keys keep using the raw slug.

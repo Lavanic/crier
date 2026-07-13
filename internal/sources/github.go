@@ -44,6 +44,7 @@ type githubListing struct {
 	Title       string   `json:"title"`
 	URL         string   `json:"url"`
 	Locations   []string `json:"locations"`
+	Category    string   `json:"category"`
 	Active      *bool    `json:"active"`
 	IsVisible   *bool    `json:"is_visible"`
 }
@@ -73,6 +74,7 @@ func (f *GitHubFeed) Fetch(ctx context.Context) ([]Job, error) {
 			Title:    l.Title,
 			Location: strings.Join(l.Locations, " | "),
 			URL:      l.URL,
+			Category: l.Category,
 		})
 	}
 	if len(listings) > 0 && len(jobs) == 0 && skipped > 0 {

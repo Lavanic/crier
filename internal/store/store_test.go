@@ -16,6 +16,7 @@ var testJob = sources.Job{
 	Title:    "Software Engineer, New Grad",
 	Location: "San Francisco, CA",
 	URL:      "https://stripe.com/jobs/12345",
+	Category: "Software",
 }
 
 func openTemp(t *testing.T) (*Store, string) {
@@ -124,7 +125,8 @@ func TestUnnotifiedBacklog(t *testing.T) {
 	if p.Key != testJob.DedupKey() {
 		t.Errorf("Key = %q", p.Key)
 	}
-	if p.Job.Title != testJob.Title || p.Job.Location != testJob.Location {
+	if p.Job.Title != testJob.Title || p.Job.Location != testJob.Location ||
+		p.Job.Category != testJob.Category {
 		t.Errorf("round-tripped job = %+v", p.Job)
 	}
 
@@ -134,6 +136,41 @@ func TestUnnotifiedBacklog(t *testing.T) {
 	}
 	if pending, _ = s.UnnotifiedSince(now.Add(-24 * time.Hour)); len(pending) != 0 {
 		t.Errorf("notified job still in backlog: %+v", pending)
+	}
+}
+
+func TestNotifiedSince(t *testing.T) {
+	// feeds the cross-post dedup: only jobs that actually alerted
+	// inside the window should come back
+	s, _ := openTemp(t)
+	now := time.Unix(1751800000, 0)
+
+	fresh := testJob
+	stale := testJob
+	stale.JobID = "old-alert"
+	silent := testJob
+	silent.JobID = "never-alerted"
+	for _, j := range []sources.Job{fresh, stale, silent} {
+		if _, err := s.MarkSeen(j, now.Add(-10*24*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.MarkNotified(fresh.DedupKey(), now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkNotified(stale.DedupKey(), now.Add(-9*24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.NotifiedSince(now.Add(-7 * 24 * time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d refs, want 1 (stale is outside the window, silent never alerted)", len(got))
+	}
+	if got[0].Company != fresh.Company || got[0].URL != fresh.URL {
+		t.Errorf("ref = %+v", got[0])
 	}
 }
 

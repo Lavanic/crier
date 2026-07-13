@@ -18,6 +18,9 @@ type Job struct {
 	Title    string
 	Location string
 	URL      string // the apply link, this is what the phone alert opens
+	// discipline tag from the simplify feed (Software, Hardware, ...),
+	// empty for board apis and the filter treats empty as "no opinion"
+	Category string
 }
 
 // DedupKey becomes the primary key in sqlite. same posting seen twice

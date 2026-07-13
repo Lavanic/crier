@@ -11,10 +11,10 @@
 db_path: crier.db
 
 filter:
-  # recall-first: I'd rather get pinged twice than miss one posting.
-  # title passes if it matches ANY of these (go regexp syntax).
-  # this set was audited against 11,906 real titles from the seeded db,
-  # gains 243 real new-grad titles over the old set with 0 lost
+  # includes stay recall-first (wide net), the excludes below do the
+  # precision work. title passes if it matches ANY of these (go regexp
+  # syntax). this set was audited against 11,906 real titles from the
+  # seeded db, gains 243 real new-grad titles over the old set with 0 lost
   include:
     # role keyword + entry-level qualifier. the separator class allows
     # commas, en/em dashes and slashes, real titles use all of them
@@ -71,6 +71,90 @@ filter:
     # patterns ("Early Careers Recruiter"), zero real swe titles lost
     - recruiter
     - coordinator #upl says what
+    # "senior" spelled the lazy way, a "Sr. Software Engineer I" leaked
+    # right past the senior keyword
+    - sr
+    # wrong-discipline junk from the 2026-07 audit of 108 real alerts,
+    # each keyword checked against all 25k seen titles for collateral
+    - field service
+    - field engineer
+    - sales engineer
+    - technical support
+    - propulsion
+    - mechanical
+    - machining
+    # also kills one "Data Scientist - GenAI & Autonomous Manufacturing"
+    # title, fine with losing that
+    - manufacturing
+    # NOT plain "production", that kills real titles like "SWE New Grad,
+    # Production Infrastructure". meta-style sre roles die too, accepted
+    - production engineer
+    - process development
+    - trainer
+    - gnc
+    - asic
+    - power platform
+    - product operations
+    - configuration management
+    - hvac
+    - uipath
+    - robotic process automation
+  # raw regexes checked against the title AND the url, workday slugs
+  # leak start dates the title hides (vanguard's "2026-Start-Date")
+  exclude_patterns:
+    - '(?i)\b202[0-6][\s_-]*start\b'
+  # a posting dies only if EVERY listed location matches one of these,
+  # "Toronto | SF" survives and empty/unknown locations always pass
+  exclude_locations:
+    - canada
+    - ontario
+    - alberta
+    - british columbia
+    - toronto
+    - ottawa
+    - vancouver
+    - montreal
+    - uk
+    - united kingdom
+    - london
+    - ireland
+    - dublin
+    - india
+    - bangalore
+    - bengaluru
+    - hyderabad
+    - europe
+    - emea
+    - apac
+    - germany
+    - france
+    - paris
+    - netherlands
+    - amsterdam
+    - poland
+    - spain
+    - singapore
+    - japan
+    - tokyo
+    - australia
+    - sydney
+    - china
+    - taiwan
+    - israel
+    - tel aviv
+    - brazil
+    - mexico
+  # simplify feed discipline tags to drop, matched as substrings so
+  # legacy "Hardware Engineering" counts. boards have no tag, always pass
+  exclude_categories:
+    - product
+    - hardware
+  # ...except simplify files firmware/embedded roles under Hardware,
+  # a title with one of these words beats the category
+  category_rescue_keywords:
+    - software
+    - firmware
+    - embedded
 
 # pretty names for alert titles (lock screen shows ~35 chars, slugs
 # read like spam). lookup only, dedup keys keep using the raw slug.

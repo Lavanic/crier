@@ -9,8 +9,10 @@ company boards + 2 aggregator feeds) and fires an iOS Critical Alert on my phone
 systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
        ├─ fan out: greenhouse / lever / ashby boards + 2 aggregator feeds
-       ├─ filter:  include regexes + exclude keywords (title only)
-       ├─ dedup:   sqlite, INSERT OR IGNORE on {source}:{company}:{job_id}
+       ├─ filter:  include regexes + exclude keywords/patterns,
+       │           us-only location gate, feed category gate
+       ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
+       │           plus cross-portal dedup on {company}:{req id}
        └─ notify:  pushover priority-2 emergency alert, retries until acked
 ```
 
@@ -86,10 +88,17 @@ jobs. Every slug shipped in `examples/config.yaml` was verified live; the
 comments record the traps (DoorDash is `doordashusa`, Lever's `Coda` is
 case-sensitive, plain `runway` is a different company, and so on).
 
-Filters are title-only regexes, tuned recall-first: I would rather get pinged
-twice than miss one posting. The `exclude_keywords` list (senior, intern,
-recruiter, ...) matches whole words only, so "International" does not trip
-"intern".
+The include regexes are tuned recall-first (wide net), and the exclude
+layers do the precision work: `exclude_keywords` (senior, intern, field
+service, propulsion, ...) matches whole words only, so "International" does
+not trip "intern"; `exclude_patterns` are raw regexes checked against the
+URL too, because Workday slugs leak start dates titles hide;
+`exclude_locations` drops a posting only when *every* listed location is
+non-US; and `exclude_categories` drops the aggregator feed's Hardware and
+Product listings unless the title sounds like software anyway. The whole
+stack is regression-tested against a hand-labeled corpus of real alerts
+(`cmd/crier/realdata_test.go`), so tuning a filter immediately shows which
+real postings flip.
 
 ## Operational notes
 

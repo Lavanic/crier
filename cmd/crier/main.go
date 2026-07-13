@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -50,6 +51,10 @@ const backlogWindow = 24 * time.Hour
 // priority and ONE emergency digest fires, instead of N sirens each
 // re-buzzing every 30s until individually acked
 const maxEmergencyPerTick = 3
+
+// how far back to check if an alert was the same posting on another
+// portal, a week covers every repeat seen in the audit
+const crossPostWindow = 7 * 24 * time.Hour
 
 // an alert plus its dedup key. backlog rows can't recompute the key
 // from parts (JobID isn't stored as a column) so it rides along
@@ -91,7 +96,14 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 	if err != nil {
 		return err
 	}
-	f, err := filter.New(cfg.Filter.Include, cfg.Filter.ExcludeKeywords)
+	f, err := filter.New(filter.Config{
+		Include:                cfg.Filter.Include,
+		ExcludeKeywords:        cfg.Filter.ExcludeKeywords,
+		ExcludePatterns:        cfg.Filter.ExcludePatterns,
+		ExcludeLocations:       cfg.Filter.ExcludeLocations,
+		ExcludeCategories:      cfg.Filter.ExcludeCategories,
+		CategoryRescueKeywords: cfg.Filter.CategoryRescueKeywords,
+	})
 	if err != nil {
 		return err
 	}
@@ -133,7 +145,7 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 			return err
 		}
 		for _, p := range pending {
-			if f.Match(p.Job.Title) {
+			if f.Match(p.Job) {
 				alerts = append(alerts, alert{job: p.Job, key: p.Key})
 			}
 		}
@@ -206,7 +218,7 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 					continue
 				}
 				newCount++
-				if f.Match(j.Title) {
+				if f.Match(j) {
 					matchCount++
 					mu.Lock()
 					alerts = append(alerts, alert{job: j, key: j.DedupKey()})
@@ -233,12 +245,81 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 		fetchErr = errors.Join(fetchErr, errors.New("zero sources fetched successfully"))
 	}
 
+	alerts = dropCrossPosts(log, st, cfg.DisplayNames, alerts)
+
 	notifyErr := dispatch(log, st, notifier, cfg.DisplayNames, alerts, dryRun, seedRun)
 
 	log.Info("tick done",
 		"sources", len(srcs), "alerts", len(alerts), "dry_run", dryRun,
 		"seed", seedRun, "elapsed_ms", time.Since(start).Milliseconds())
 	return errors.Join(fetchErr, notifyErr)
+}
+
+// dropCrossPosts suppresses alerts the phone already got through a
+// different portal or feed. best-effort, a db hiccup keeps every alert
+func dropCrossPosts(log *slog.Logger, st *store.Store, names map[string]string, alerts []alert) []alert {
+	if len(alerts) == 0 {
+		return alerts
+	}
+	recent, err := st.NotifiedSince(time.Now().Add(-crossPostWindow))
+	if err != nil {
+		log.Error("cross-post lookup failed, keeping all alerts", "err", err)
+		return alerts
+	}
+	seen := make(map[string]bool, len(recent))
+	for _, r := range recent {
+		seen[crossPostKey(names, r.Company, r.URL)] = true
+	}
+	kept := alerts[:0]
+	for _, a := range alerts {
+		k := crossPostKey(names, a.job.Company, a.job.URL)
+		if seen[k] {
+			log.Info("suppressed cross-post duplicate",
+				"company", a.job.Company, "title", a.job.Title, "url", a.job.URL)
+			if err := st.MarkNotified(a.key, time.Now()); err != nil {
+				log.Error("mark notified failed", "job", a.key, "err", err)
+			}
+			continue
+		}
+		seen[k] = true
+		kept = append(kept, a)
+	}
+	return kept
+}
+
+// crossPostKey is company + requisition id. display map then first
+// word only, so "andurilindustries" and simplify's "Anduril" agree
+func crossPostKey(names map[string]string, company, rawURL string) string {
+	c := strings.ToLower(strings.TrimSpace(displayName(names, company)))
+	c = strings.TrimPrefix(c, "the ")
+	if i := strings.IndexByte(c, ' '); i > 0 {
+		c = c[:i]
+	}
+	c = strings.TrimRight(c, ",.")
+	return c + "|" + reqID(rawURL)
+}
+
+// workday's repost counter (_R54894-1). only 1-2 digits so ids with a
+// longer numeric tail like REQ-12218 keep theirs
+var repostSuffix = regexp.MustCompile(`-\d{1,2}$`)
+
+// reqID pulls the requisition id from an apply url: last path segment,
+// or after the last underscore on workday. no digits = use the full url
+func reqID(rawURL string) string {
+	u := rawURL
+	if i := strings.IndexAny(u, "?#"); i >= 0 {
+		u = u[:i]
+	}
+	u = strings.TrimRight(u, "/")
+	seg := u[strings.LastIndexByte(u, '/')+1:]
+	if i := strings.LastIndexByte(seg, '_'); i >= 0 {
+		seg = seg[i+1:]
+	}
+	seg = repostSuffix.ReplaceAllString(seg, "")
+	if !strings.ContainsAny(seg, "0123456789") {
+		return rawURL
+	}
+	return strings.ToLower(seg)
 }
 
 // dispatch sends (or logs, or suppresses) the collected alerts and

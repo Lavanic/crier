@@ -42,6 +42,9 @@ CREATE TABLE IF NOT EXISTS source_polls (
 var migrations = []string{
 	schemaV1,
 	`ALTER TABLE jobs ADD COLUMN location TEXT NOT NULL DEFAULT ''`,
+	// so backlog retries re-filter with the same category the fresh
+	// fetch had, old rows default to ''
+	`ALTER TABLE jobs ADD COLUMN category TEXT NOT NULL DEFAULT ''`,
 }
 
 type Store struct {
@@ -98,9 +101,9 @@ func (s *Store) CountJobs() (int64, error) {
 // on the same jobs forever
 func (s *Store) MarkSeen(j sources.Job, now time.Time) (bool, error) {
 	res, err := s.db.Exec(
-		`INSERT OR IGNORE INTO jobs (id, company, title, url, source, location, first_seen_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		j.DedupKey(), j.Company, j.Title, j.URL, j.Source, j.Location, now.Unix(),
+		`INSERT OR IGNORE INTO jobs (id, company, title, url, source, location, category, first_seen_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		j.DedupKey(), j.Company, j.Title, j.URL, j.Source, j.Location, j.Category, now.Unix(),
 	)
 	if err != nil {
 		return false, fmt.Errorf("mark seen %s: %w", j.DedupKey(), err)
@@ -137,7 +140,7 @@ type PendingAlert struct {
 // unless the filter now wants them
 func (s *Store) UnnotifiedSince(since time.Time) ([]PendingAlert, error) {
 	rows, err := s.db.Query(
-		`SELECT id, company, title, url, source, location FROM jobs
+		`SELECT id, company, title, url, source, location, category FROM jobs
 		 WHERE notified_at IS NULL AND first_seen_at >= ?`, since.Unix(),
 	)
 	if err != nil {
@@ -149,10 +152,39 @@ func (s *Store) UnnotifiedSince(since time.Time) ([]PendingAlert, error) {
 	for rows.Next() {
 		var p PendingAlert
 		if err := rows.Scan(&p.Key, &p.Job.Company, &p.Job.Title,
-			&p.Job.URL, &p.Job.Source, &p.Job.Location); err != nil {
+			&p.Job.URL, &p.Job.Source, &p.Job.Location, &p.Job.Category); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// NotifiedRef is just enough of an already-alerted job for main's
+// cross-post dedup
+type NotifiedRef struct {
+	Company string
+	URL     string
+}
+
+// NotifiedSince returns jobs handled after the given time, main uses
+// it to suppress cross-posted duplicates
+func (s *Store) NotifiedSince(since time.Time) ([]NotifiedRef, error) {
+	rows, err := s.db.Query(
+		`SELECT company, url FROM jobs WHERE notified_at >= ?`, since.Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []NotifiedRef
+	for rows.Next() {
+		var r NotifiedRef
+		if err := rows.Scan(&r.Company, &r.URL); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
 	}
 	return out, rows.Err()
 }
