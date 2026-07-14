@@ -41,6 +41,26 @@ func TestReqID(t *testing.T) {
 		{"greenhouse embed falls back",
 			"https://boards.greenhouse.io/embed/job_app?token=8046879",
 			"https://boards.greenhouse.io/embed/job_app?token=8046879"},
+		// google's slugged and slugless url forms must collide, the
+		// feeds use both and the direct source uses slugless
+		{"google slugged",
+			"https://www.google.com/about/careers/applications/jobs/results/143333237156913862-software-engineer-ii/",
+			"143333237156913862"},
+		{"google slugless",
+			"https://www.google.com/about/careers/applications/jobs/results/143333237156913862",
+			"143333237156913862"},
+		// apple puts the position id one level above the title slug,
+		// and simplify links the id-only form of the same posting
+		{"apple id plus slug",
+			"https://jobs.apple.com/en-us/details/200622968/swe-early-career-user-land-security?team=SFTWR",
+			"200622968"},
+		{"apple id only",
+			"https://jobs.apple.com/en-us/details/200622968",
+			"200622968"},
+		// ashby's /{uuid}/application form keys on the uuid
+		{"ashby uuid",
+			"https://jobs.ashbyhq.com/evenup/41488eae-50a9-4ad3-b6e0-2fd28efb238e/application",
+			"41488eae-50a9-4ad3-b6e0-2fd28efb238e"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

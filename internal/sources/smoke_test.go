@@ -35,6 +35,36 @@ func TestSmokeGitHubFeeds(t *testing.T) {
 	}
 }
 
+func TestSmokeGoogleCareers(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	url := "https://www.google.com/about/careers/applications/jobs/results?target_level=EARLY&location=United%20States&sort_by=date"
+	jobs, err := NewGoogleCareers(NewHTTPClient(), "early-us", url, 5*time.Minute).Fetch(ctx)
+	if err != nil {
+		t.Fatalf("live fetch failed: %v", err)
+	}
+	if len(jobs) == 0 {
+		t.Fatal("0 early-career us jobs at google, suspicious")
+	}
+	t.Logf("%d jobs, first: %q (%s)", len(jobs), jobs[0].Title, jobs[0].Location)
+}
+
+func TestSmokeAppleJobs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	url := "https://jobs.apple.com/en-us/search?search=software%20engineer&sort=newest&location=united-states-USA"
+	jobs, err := NewAppleJobs(NewHTTPClient(), "swe-us-newest", url, 5*time.Minute).Fetch(ctx)
+	if err != nil {
+		t.Fatalf("live fetch failed: %v", err)
+	}
+	if len(jobs) == 0 {
+		t.Fatal("0 us software jobs at apple, suspicious")
+	}
+	t.Logf("%d jobs, first: %q (%s)", len(jobs), jobs[0].Title, jobs[0].Location)
+}
+
 func TestSmokeAshby(t *testing.T) {
 	client := NewHTTPClient()
 	for _, slug := range []string{"ramp", "linear"} {

@@ -303,23 +303,37 @@ func crossPostKey(names map[string]string, company, rawURL string) string {
 // longer numeric tail like REQ-12218 keep theirs
 var repostSuffix = regexp.MustCompile(`-\d{1,2}$`)
 
+// google sometimes appends a title slug to the numeric id
+// (…/results/143333237156913862-software-engineer-ii), 8+ digits so
+// year-leading slugs don't trip it
+var leadingID = regexp.MustCompile(`^\d{8,}`)
+
 // reqID pulls the requisition id from an apply url: last path segment,
-// or after the last underscore on workday. no digits = use the full url
+// after the last underscore on workday. tries the parent segment too
+// since apple and ashby put the id one level up (/details/{id}/{slug},
+// /{uuid}/application). no digits anywhere = use the full url
 func reqID(rawURL string) string {
 	u := rawURL
 	if i := strings.IndexAny(u, "?#"); i >= 0 {
 		u = u[:i]
 	}
 	u = strings.TrimRight(u, "/")
-	seg := u[strings.LastIndexByte(u, '/')+1:]
-	if i := strings.LastIndexByte(seg, '_'); i >= 0 {
-		seg = seg[i+1:]
+	for range 2 {
+		i := strings.LastIndexByte(u, '/')
+		seg := u[i+1:]
+		u = u[:max(i, 0)]
+		if j := strings.LastIndexByte(seg, '_'); j >= 0 {
+			seg = seg[j+1:]
+		}
+		if m := leadingID.FindString(seg); m != "" {
+			return m
+		}
+		seg = repostSuffix.ReplaceAllString(seg, "")
+		if strings.ContainsAny(seg, "0123456789") {
+			return strings.ToLower(seg)
+		}
 	}
-	seg = repostSuffix.ReplaceAllString(seg, "")
-	if !strings.ContainsAny(seg, "0123456789") {
-		return rawURL
-	}
-	return strings.ToLower(seg)
+	return rawURL
 }
 
 // dispatch sends (or logs, or suppresses) the collected alerts and
@@ -440,6 +454,16 @@ func buildSources(cfg *config.Config) []sources.Source {
 	}
 	for _, feed := range cfg.Sources.GitHub {
 		srcs = append(srcs, sources.NewGitHubFeed(
+			client, feed.Name, feed.URL,
+			time.Duration(feed.MinIntervalSec)*time.Second))
+	}
+	for _, feed := range cfg.Sources.Google {
+		srcs = append(srcs, sources.NewGoogleCareers(
+			client, feed.Name, feed.URL,
+			time.Duration(feed.MinIntervalSec)*time.Second))
+	}
+	for _, feed := range cfg.Sources.Apple {
+		srcs = append(srcs, sources.NewAppleJobs(
 			client, feed.Name, feed.URL,
 			time.Duration(feed.MinIntervalSec)*time.Second))
 	}

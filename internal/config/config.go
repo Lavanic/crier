@@ -51,15 +51,21 @@ type Sources struct {
 	Greenhouse []string `yaml:"greenhouse"`
 	Lever      []string `yaml:"lever"`
 	Ashby      []string `yaml:"ashby"`
-	// github aggregator feeds (simplify, vanshb03) have their own shape
-	GitHub []GitHubFeed `yaml:"github"`
+	// github aggregator feeds (simplify, vanshb03)
+	GitHub []Feed `yaml:"github"`
+	// big-tech careers pages parsed straight off their html, for the
+	// companies not on any public ats board
+	Google []Feed `yaml:"google"`
+	Apple  []Feed `yaml:"apple"`
 }
 
-type GitHubFeed struct {
+// Feed is a named url polled on its own cadence: github aggregators,
+// google and apple careers queries all share this shape
+type Feed struct {
 	Name string `yaml:"name"`
 	URL  string `yaml:"url"`
-	// github's raw cdn caches ~5 min so polling faster is wasted,
-	// the orchestrator skips this feed if it polled more recently
+	// these endpoints cache or don't need 30s polling, the
+	// orchestrator skips a feed it polled more recently than this
 	MinIntervalSec int `yaml:"min_interval_seconds"`
 }
 
@@ -74,7 +80,7 @@ func (p Pushover) HasCreds() bool {
 	return p.AppToken != "" && p.UserKey != ""
 }
 
-const defaultGitHubIntervalSec = 300
+const defaultFeedIntervalSec = 300
 
 // Load reads the main config, layers config.local.yaml on top if it
 // exists next to it, then applies env var overrides, then validates.
@@ -145,16 +151,19 @@ func (c *Config) applyDefaults() {
 	if c.DBPath == "" {
 		c.DBPath = "crier.db"
 	}
-	for i := range c.Sources.GitHub {
-		if c.Sources.GitHub[i].MinIntervalSec == 0 {
-			c.Sources.GitHub[i].MinIntervalSec = defaultGitHubIntervalSec
+	for _, feeds := range [][]Feed{c.Sources.GitHub, c.Sources.Google, c.Sources.Apple} {
+		for i := range feeds {
+			if feeds[i].MinIntervalSec == 0 {
+				feeds[i].MinIntervalSec = defaultFeedIntervalSec
+			}
 		}
 	}
 }
 
 func (c *Config) validate() error {
 	n := len(c.Sources.Greenhouse) + len(c.Sources.Lever) +
-		len(c.Sources.Ashby) + len(c.Sources.GitHub)
+		len(c.Sources.Ashby) + len(c.Sources.GitHub) +
+		len(c.Sources.Google) + len(c.Sources.Apple)
 	if n == 0 {
 		return errors.New("no sources configured")
 	}
@@ -173,9 +182,11 @@ func (c *Config) validate() error {
 			return fmt.Errorf("bad exclude pattern %q: %w", pat, err)
 		}
 	}
-	for _, f := range c.Sources.GitHub {
-		if f.Name == "" || f.URL == "" {
-			return fmt.Errorf("github feed needs both name and url, got name=%q url=%q", f.Name, f.URL)
+	for _, feeds := range [][]Feed{c.Sources.GitHub, c.Sources.Google, c.Sources.Apple} {
+		for _, f := range feeds {
+			if f.Name == "" || f.URL == "" {
+				return fmt.Errorf("feed source needs both name and url, got name=%q url=%q", f.Name, f.URL)
+			}
 		}
 	}
 	return nil

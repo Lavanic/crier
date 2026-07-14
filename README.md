@@ -2,13 +2,15 @@
   <img src="assets/town_crier.jpg" alt="a town crier ringing his bell" width="300">
 </p>
 
-A single-binary Go bot that watches 125 sources (123 Greenhouse/Lever/Ashby
-company boards + 2 aggregator feeds) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. I'm just getting paged like an on-call so it punches through DnD, and tapping it opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
+A single-binary Go bot that watches 128 sources (123 Greenhouse/Lever/Ashby
+company boards, 2 aggregator feeds, plus the Google and Apple careers sites
+directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. I'm just getting paged like an on-call so it punches through DnD, and tapping it opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
 
 ```
 systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
-       ├─ fan out: greenhouse / lever / ashby boards + 2 aggregator feeds
+       ├─ fan out: greenhouse / lever / ashby boards + aggregator feeds
+     │           + google / apple careers pages
        ├─ filter:  include regexes + exclude keywords/patterns,
        │           us-only location gate, feed category gate
        ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
@@ -25,6 +27,12 @@ feeds ([SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Gra
 and [vanshb03/New-Grad-2027](https://github.com/vanshb03/New-Grad-2027),
 credit where due, they do the heavy scraping for big tech) act as the dragnet
 for companies not on the slug list, at their 5-30 minute refresh cadence.
+
+Google and Apple run their own career sites with no public board API, and
+the aggregators cover them patchily and late. Both sites embed their search
+results as JSON in the page HTML and serve it to a plain GET, so crier
+polls a date-sorted, server-side-filtered search page every 5 minutes and
+parses the embedded JSON. No headless browser needed.
 
 ## Quick start (local)
 

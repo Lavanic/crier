@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -29,6 +30,36 @@ func NewHTTPClient() *http.Client {
 	// we log per source ourselves, retryablehttp's own logging is noise
 	rc.Logger = nil
 	return rc.StandardClient()
+}
+
+// the google careers page runs ~1.3MB, cap reads so a misbehaving
+// page can't balloon memory
+const maxHTMLBytes = 8 << 20
+
+// getHTML does a GET with browser headers and returns the body, for
+// career sites (google, apple) that embed their job json in the page
+func getHTML(ctx context.Context, c *http.Client, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET %s: unexpected status %s", url, resp.Status)
+	}
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxHTMLBytes))
+	if err != nil {
+		return "", fmt.Errorf("GET %s: reading body: %w", url, err)
+	}
+	return string(b), nil
 }
 
 // getJSON does a GET with browser headers and decodes the response

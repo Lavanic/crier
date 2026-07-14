@@ -366,3 +366,21 @@ sources:
     - name: vanshb03
       url: https://raw.githubusercontent.com/vanshb03/New-Grad-2027/dev/.github/scripts/listings.json
       min_interval_seconds: 300
+  # big-tech careers pages, these companies aren't on any public ats
+  # board. the job json is embedded in the page html and the server
+  # does the filtering via url params, page 1 = 20 newest matches.
+  # gentle 5 min default cadence on purpose, these are consumer sites
+  google:
+    # tight net: quoted-phrase query, low volume
+    - name: swe-early-us
+      url: https://www.google.com/about/careers/applications/jobs/results?q=%22software%20engineer%22&target_level=EARLY&location=United%20States&sort_by=date
+    # wide net: every early-career us posting (the title filter kills
+    # the data center technician flood). same job in both queries
+    # dedups by id, so add query variants freely
+    - name: early-us
+      url: https://www.google.com/about/careers/applications/jobs/results?target_level=EARLY&location=United%20States&sort_by=date
+  apple:
+    # apple rarely labels roles new-grad, so expect low volume: only
+    # titles with early career/graduate/engineer I markers get through
+    - name: swe-us-newest
+      url: https://jobs.apple.com/en-us/search?search=software%20engineer&sort=newest&location=united-states-USA
