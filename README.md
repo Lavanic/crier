@@ -10,13 +10,13 @@ directly) and fires an iOS Critical Alert on my phone within about a minute of a
 systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
        ├─ fan out: greenhouse / lever / ashby boards + aggregator feeds
-     │           + google / apple careers pages
+       │           + google / apple careers pages
        ├─ filter:  include regexes + exclude keywords/patterns,
        │           us-only location gate, feed category gate
        ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
        │           plus cross-portal dedup on {company}:{req id}
-       └─ notify:  pushover. priority_companies siren (emergency, re-
-                 buzzes until acked), everything else pings normally
+       └─ notify:  pushover. priority_companies siren (emergency,
+                   re-buzzes until acked), the rest ping normally
 ```
 
 ## Why polling can be this fast
