@@ -153,6 +153,17 @@ filter:
     - firmware
     - embedded
 
+# priority companies: matches from these siren through dnd (pushover
+# emergency, re-buzzes until acked). everything else arrives as a
+# normal ping that respects quiet hours. exact match on the display
+# name, case-insensitive, so feeds' long forms need their own entry
+priority_companies:
+  - OpenAI
+  - Google
+  - NVIDIA
+  - HRT
+  - Hudson River Trading
+
 # pretty names for alert titles (lock screen shows ~35 chars, slugs
 # read like spam). lookup only, dedup keys keep using the raw slug.
 # single lowercase words auto-capitalize (stripe -> Stripe), only the

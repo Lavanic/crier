@@ -247,7 +247,8 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 
 	alerts = dropCrossPosts(log, st, cfg.DisplayNames, alerts)
 
-	notifyErr := dispatch(log, st, notifier, cfg.DisplayNames, alerts, dryRun, seedRun)
+	notifyErr := dispatch(log, st, notifier, cfg.DisplayNames,
+		sirenSet(cfg.PriorityCompanies), alerts, dryRun, seedRun)
 
 	log.Info("tick done",
 		"sources", len(srcs), "alerts", len(alerts), "dry_run", dryRun,
@@ -336,15 +337,32 @@ func reqID(rawURL string) string {
 	return rawURL
 }
 
+// sirenSet turns the priority_companies list into a lowercase lookup
+func sirenSet(companies []string) map[string]bool {
+	set := make(map[string]bool, len(companies))
+	for _, c := range companies {
+		set[strings.ToLower(strings.TrimSpace(c))] = true
+	}
+	return set
+}
+
 // dispatch sends (or logs, or suppresses) the collected alerts and
 // stamps notified_at on every alert that was handled. jobs that fail
-// to send stay unstamped and ride the backlog next tick
+// to send stay unstamped and ride the backlog next tick.
+// priority-company matches go out as sirens (pushover emergency,
+// through dnd), everything else as a normal ping
 func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
-	names map[string]string, alerts []alert, dryRun, seedRun bool) error {
+	names map[string]string, siren map[string]bool, alerts []alert, dryRun, seedRun bool) error {
 
 	stamp := func(key string) {
 		if err := st.MarkNotified(key, time.Now()); err != nil {
 			log.Error("mark notified failed", "job", key, "err", err)
+		}
+	}
+	sirens := 0
+	for _, a := range alerts {
+		if siren[strings.ToLower(displayName(names, a.job.Company))] {
+			sirens++
 		}
 	}
 
@@ -352,7 +370,8 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 		for _, a := range alerts {
 			log.Info("suppressed (dry-run/seed), would notify",
 				"company", a.job.Company, "title", a.job.Title,
-				"location", a.job.Location, "url", a.job.URL)
+				"location", a.job.Location, "url", a.job.URL,
+				"siren", siren[strings.ToLower(displayName(names, a.job.Company))])
 			// stamped so these don't flood the backlog on the next
 			// real tick, a dry or seed run counts as handled
 			stamp(a.key)
@@ -360,28 +379,33 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 		return nil
 	}
 
-	// burst mode: individual alerts go quiet, one siren summarizes
-	priority := notify.Emergency
-	if len(alerts) > maxEmergencyPerTick {
-		priority = notify.Normal
-		log.Warn("alert burst, downgrading individuals and sending one digest", "count", len(alerts))
+	// burst mode: too many sirens at once collapse into one emergency
+	// digest and the individuals all drop to normal
+	burst := sirens > maxEmergencyPerTick
+	if burst {
+		log.Warn("siren burst, downgrading individuals and sending one digest", "count", sirens)
 	}
 
 	var failed int
 	for _, a := range alerts {
 		j := a.job
 		j.Company = displayName(names, j.Company)
-		if err := notifier.Notify(j, priority); err != nil {
+		p := notify.Normal
+		if !burst && siren[strings.ToLower(j.Company)] {
+			p = notify.Emergency
+		}
+		if err := notifier.Notify(j, p); err != nil {
 			// loud but not fatal, unstamped rows retry via the backlog
 			log.Error("notify failed", "job", a.key, "err", err)
 			failed++
 			continue
 		}
 		stamp(a.key)
-		log.Info("notified", "company", j.Company, "title", j.Title, "url", j.URL)
+		log.Info("notified", "company", j.Company, "title", j.Title,
+			"siren", p == notify.Emergency, "url", j.URL)
 	}
 
-	if priority == notify.Normal && len(alerts) > failed {
+	if burst && len(alerts) > failed {
 		title := fmt.Sprintf("%d new job matches", len(alerts))
 		if err := notifier.Send(title, digestBody(names, alerts), notify.Emergency); err != nil {
 			log.Error("digest send failed", "err", err)

@@ -4,7 +4,7 @@
 
 A single-binary Go bot that watches 128 sources (123 Greenhouse/Lever/Ashby
 company boards, 2 aggregator feeds, plus the Google and Apple careers sites
-directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. I'm just getting paged like an on-call so it punches through DnD, and tapping it opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
+directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. Postings from a hand-picked list of priority companies page me like an on-call, punching through DnD; everything else arrives as a normal ping. Tapping either opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
 
 ```
 systemd timer (every 30s on a $4 vps)
@@ -15,7 +15,8 @@ systemd timer (every 30s on a $4 vps)
        │           us-only location gate, feed category gate
        ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
        │           plus cross-portal dedup on {company}:{req id}
-       └─ notify:  pushover priority-2 emergency alert, retries until acked
+       └─ notify:  pushover. priority_companies siren (emergency, re-
+                 buzzes until acked), everything else pings normally
 ```
 
 ## Why polling can be this fast

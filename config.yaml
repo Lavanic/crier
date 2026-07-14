@@ -156,6 +156,72 @@ filter:
     - firmware
     - embedded
 
+# priority companies: matches from these siren through dnd (pushover
+# emergency, re-buzzes until acked). everything else arrives as a
+# normal ping that respects quiet hours. exact match on the display
+# name, case-insensitive, so feeds' long forms need their own entry
+# (HRT and Hudson River Trading are both here for that reason)
+priority_companies:
+  # ai labs
+  - OpenAI
+  - Anthropic
+  - Google
+  - DeepMind
+  - Google DeepMind
+  - xAI
+  #big tech
+  - Meta
+  - Apple
+  - NVIDIA
+  - Netflix
+  - Airbnb
+  - Waymo
+  - Anduril
+  - Anduril Industries
+  # quant
+  - HRT
+  - Hudson River Trading
+  - Jane Street
+  - Citadel
+  - Citadel Securities
+  - Jump Trading
+  - Two Sigma
+  - Optiver
+  - DRW
+  - IMC
+  - IMC Trading
+  - Five Rings
+  - Akuna Capital
+  - CTC
+  - Chicago Trading Company
+  - Tower Research
+  - Tower Research Capital
+  - Virtu
+  - Virtu Financial
+  - Flow Traders
+  - Belvedere
+  - Belvedere Trading
+  - Old Mission
+  - Old Mission Capital
+  - Squarepoint
+  - Squarepoint Capital
+  - Point72
+  # the wlb + comp tier that beats big tech grind culture
+  - Stripe
+  - Databricks
+  - Snowflake
+  - Ramp
+  - Spotify
+  - Figma
+  - Pinterest
+  - Roblox
+  - Duolingo
+  - Datadog
+  - Plaid
+  - Robinhood
+  - Reddit
+  - Discord
+
 # pretty names for alert titles (lock screen shows ~35 chars, slugs
 # read like spam). lookup only, dedup keys keep using the raw slug.
 # single lowercase words auto-capitalize (stripe -> Stripe), only the

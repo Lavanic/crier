@@ -26,7 +26,11 @@ type Config struct {
 	// read terribly on a lock screen. lookup only, dedup keys always
 	// use the raw slug so renaming here never re-alerts old jobs
 	DisplayNames map[string]string `yaml:"display_names"`
-	Pushover     Pushover          `yaml:"pushover"`
+	// companies whose matches siren through dnd (pushover emergency).
+	// everything else arrives as a normal ping that respects quiet
+	// hours. matched case-insensitively against the display name
+	PriorityCompanies []string `yaml:"priority_companies"`
+	Pushover          Pushover `yaml:"pushover"`
 }
 
 type Filter struct {

@@ -1,6 +1,33 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
+
+func TestSirenLookup(t *testing.T) {
+	names := map[string]string{"wehrtyou": "HRT", "openai": "OpenAI"}
+	siren := sirenSet([]string{"OpenAI", "Google", "HRT", "Hudson River Trading"})
+
+	tests := []struct {
+		company string
+		want    bool
+	}{
+		{"openai", true},   // board slug, mapped by display_names
+		{"wehrtyou", true}, // ugly slug that maps to HRT
+		{"Google", true},   // feed display name
+		{"GOOGLE", true},   // case must not matter
+		{"Hudson River Trading", true},
+		{"stripe", false},
+		{"Googler Staffing LLC", false}, // exact match only, no substrings
+	}
+	for _, tt := range tests {
+		got := siren[strings.ToLower(displayName(names, tt.company))]
+		if got != tt.want {
+			t.Errorf("siren lookup for %q = %v, want %v", tt.company, got, tt.want)
+		}
+	}
+}
 
 // every case here is a real url from the prod db
 func TestReqID(t *testing.T) {
