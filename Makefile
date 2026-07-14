@@ -8,7 +8,10 @@ MODULE  := github.com/Lavanic/crier
 # GOARCH=arm64 for a raspberry pi target
 GOARCH  ?= amd64
 
-.PHONY: build run dry-run test smoke deploy clean
+.PHONY: build run dry-run test smoke deploy links clean
+
+# how many alerts `make links` shows
+N ?= 15
 
 build:
 	go build -o $(BINARY) ./cmd/crier
@@ -41,6 +44,15 @@ deploy:
 	scp config.yaml config.local.yaml $(DEPLOY_HOST):/opt/crier/
 	scp systemd/crier.service systemd/crier.timer $(DEPLOY_HOST):/etc/systemd/system/
 	ssh $(DEPLOY_HOST) 'mv /usr/local/bin/$(BINARY).new /usr/local/bin/$(BINARY) && chown -R crier:crier /opt/crier && chmod 600 /opt/crier/config.local.yaml && systemctl daemon-reload && systemctl enable --now crier.timer'
+
+# pulls the last N alerted jobs off the server with their apply links on
+# their own line, so the terminal makes them clickable. needs local
+# sqlite3, override the count with N=30
+links:
+	@test -n "$(DEPLOY_HOST)" || (echo "set DEPLOY_HOST=user@host" && exit 1)
+	@tmp=$$(mktemp) && scp -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
+	sqlite3 $$tmp "select datetime(notified_at,'unixepoch','localtime') || '  ' || company || ' - ' || title || char(10) || '    ' || url || char(10) from jobs where notified_at is not null order by notified_at desc limit $(N)" && \
+	rm -f $$tmp
 
 clean:
 	rm -rf $(BINARY) dist/
