@@ -132,7 +132,10 @@ func (f *Filter) dropByLocation(location string) bool {
 		return false
 	}
 	sawOne := false
-	for _, part := range strings.Split(location, "|") {
+	// feeds separate multi-office listings with pipes, greenhouse uses
+	// semicolons ("New York, NY; Singapore"). NOT commas, those live
+	// inside single locations ("Toronto, ON, CA")
+	for _, part := range strings.FieldsFunc(location, func(r rune) bool { return r == '|' || r == ';' }) {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

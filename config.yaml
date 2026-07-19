@@ -67,6 +67,7 @@ filter:
     - director
     - architect
     - phd
+    - phds # whole-word matching means the plural needs its own entry
     # hr side of campus recruiting kept tripping the early-career
     # patterns ("Early Careers Recruiter"), zero real swe titles lost
     - recruiter
@@ -99,10 +100,45 @@ filter:
     - hvac
     - uipath
     - robotic process automation
+    # second audit 2026-07-17: wrong-discipline titles that slipped the
+    # first pass, mostly aero/defense/semiconductor and IT-ops postings
+    - electrical
+    - hardware engineer
+    - fluids
+    - phased array
+    - flight test
+    - test & evaluation
+    - test and evaluation
+    - aerostructures
+    - site engineer
+    - yield enhancement
+    - business intelligence
+    - gas turbine
+    - servicenow
+    - launch operations
+    - ground systems
+    - it systems
+    - communication systems
+    - support engineering
+    - engineer/analyst
+    - automation developer
   # raw regexes checked against the title AND the url, workday slugs
   # leak start dates the title hides (vanguard's "2026-Start-Date")
   exclude_patterns:
     - '(?i)\b202[0-6][\s_-]*start\b'
+    # I graduate dec 2026 and start in 2027, so 2026-and-earlier cohort
+    # tags are all wrong-year junk. workday urls keep the year even when
+    # a feed strips it from the title (New-College-Grad-2026_JR2021230)
+    - '(?i)grad(uate)?s?[\s_-]+202[0-6](\D|$)'
+    - '(?i)early[\s_-]+career[\s_-]+202[0-6](\D|$)'
+    # workday prefixes XMLNAME- when a title starts with a year, this
+    # catches "2026 Raytheon Full-Time Software Engineer I" style reqs
+    - '(?i)xmlname-202[0-6]-'
+    - '(?i)^\s*202[0-6]\b'
+    # eligibility windows, but only ones that END by 2026. doordash's
+    # "(Graduation Date: Fall 2025-Summer 2026)" dies, a window running
+    # into 2027 would still pass
+    - '(?i)graduation[\s_-]+date[^)]*202[0-6]\s*\)'
   # a posting dies only if EVERY listed location matches one of these,
   # "Toronto | SF" survives and empty/unknown locations always pass
   exclude_locations:
@@ -144,6 +180,11 @@ filter:
     - tel aviv
     - brazil
     - mexico
+    - new zealand
+    - auckland
+    - nz
+    - rwanda
+    - kigali
   # simplify feed discipline tags to drop, matched as substrings so
   # legacy "Hardware Engineering" counts. boards have no tag, always pass
   exclude_categories:
@@ -276,6 +317,8 @@ display_names:
   riotgames: Riot Games
   epicgames: Epic Games
   posthog: PostHog
+  Hudson River Trading: HRT
+  Chicago Trading Company: CTC
 
 sources:
   greenhouse:
