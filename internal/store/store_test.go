@@ -139,21 +139,25 @@ func TestUnnotifiedBacklog(t *testing.T) {
 	}
 }
 
-func TestNotifiedSince(t *testing.T) {
-	// feeds the cross-post dedup: only jobs that actually alerted
-	// inside the window should come back
+func TestSeenSince(t *testing.T) {
+	// feeds the cross-post dedup: anything seen OR notified inside the
+	// window comes back, even if it never alerted. jobs whose whole
+	// history is outside the window stay out
 	s, _ := openTemp(t)
 	now := time.Unix(1751800000, 0)
 
 	fresh := testJob
 	stale := testJob
 	stale.JobID = "old-alert"
-	silent := testJob
-	silent.JobID = "never-alerted"
-	for _, j := range []sources.Job{fresh, stale, silent} {
+	killed := testJob
+	killed.JobID = "seen-but-filtered"
+	for _, j := range []sources.Job{fresh, stale} {
 		if _, err := s.MarkSeen(j, now.Add(-10*24*time.Hour)); err != nil {
 			t.Fatal(err)
 		}
+	}
+	if _, err := s.MarkSeen(killed, now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
 	}
 	if err := s.MarkNotified(fresh.DedupKey(), now); err != nil {
 		t.Fatal(err)
@@ -162,15 +166,22 @@ func TestNotifiedSince(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := s.NotifiedSince(now.Add(-7 * 24 * time.Hour))
+	got, err := s.SeenSince(now.Add(-7 * 24 * time.Hour))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 1 {
-		t.Fatalf("got %d refs, want 1 (stale is outside the window, silent never alerted)", len(got))
+	if len(got) != 2 {
+		t.Fatalf("got %d refs, want 2 (fresh notified in window, killed seen in window, stale all outside)", len(got))
 	}
-	if got[0].Company != fresh.Company || got[0].URL != fresh.URL {
-		t.Errorf("ref = %+v", got[0])
+	keys := map[string]bool{}
+	for _, r := range got {
+		if r.Company != testJob.Company || r.URL != testJob.URL {
+			t.Errorf("ref = %+v", r)
+		}
+		keys[r.Key] = true
+	}
+	if !keys[fresh.DedupKey()] || !keys[killed.DedupKey()] {
+		t.Errorf("wrong keys came back: %v", keys)
 	}
 }
 

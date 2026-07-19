@@ -256,20 +256,31 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 	return errors.Join(fetchErr, notifyErr)
 }
 
-// dropCrossPosts suppresses alerts the phone already got through a
-// different portal or feed. best-effort, a db hiccup keeps every alert
+// dropCrossPosts suppresses alerts for postings the db already knows
+// through a different portal or feed, whether that copy alerted or got
+// filtered. the feeds re-list board postings with cleaned-up titles
+// (simplify strips year tags), so an echo of a killed job must die by
+// req id, not get re-judged. best-effort, a db hiccup keeps every alert
 func dropCrossPosts(log *slog.Logger, st *store.Store, names map[string]string, alerts []alert) []alert {
 	if len(alerts) == 0 {
 		return alerts
 	}
-	recent, err := st.NotifiedSince(time.Now().Add(-crossPostWindow))
+	recent, err := st.SeenSince(time.Now().Add(-crossPostWindow))
 	if err != nil {
 		log.Error("cross-post lookup failed, keeping all alerts", "err", err)
 		return alerts
 	}
+	// this tick's fetch already marked the alerts themselves seen, so
+	// skip their own rows or every alert would suppress itself
+	own := make(map[string]bool, len(alerts))
+	for _, a := range alerts {
+		own[a.key] = true
+	}
 	seen := make(map[string]bool, len(recent))
 	for _, r := range recent {
-		seen[crossPostKey(names, r.Company, r.URL)] = true
+		if !own[r.Key] {
+			seen[crossPostKey(names, r.Company, r.URL)] = true
+		}
 	}
 	kept := alerts[:0]
 	for _, a := range alerts {

@@ -160,28 +160,32 @@ func (s *Store) UnnotifiedSince(since time.Time) ([]PendingAlert, error) {
 	return out, rows.Err()
 }
 
-// NotifiedRef is just enough of an already-alerted job for main's
-// cross-post dedup
-type NotifiedRef struct {
+// SeenRef is just enough of a recorded job for main's cross-post
+// dedup. Key lets main skip an alert's own row in the lookup
+type SeenRef struct {
+	Key     string
 	Company string
 	URL     string
 }
 
-// NotifiedSince returns jobs handled after the given time, main uses
-// it to suppress cross-posted duplicates
-func (s *Store) NotifiedSince(since time.Time) ([]NotifiedRef, error) {
+// SeenSince returns every job recorded after the given time, alerted
+// or not. cross-post dedup checks new alerts against all of these:
+// once one portal's copy was seen and judged, the same req id arriving
+// through another source shouldn't reopen the question
+func (s *Store) SeenSince(since time.Time) ([]SeenRef, error) {
 	rows, err := s.db.Query(
-		`SELECT company, url FROM jobs WHERE notified_at >= ?`, since.Unix(),
+		`SELECT id, company, url FROM jobs
+		 WHERE first_seen_at >= ? OR notified_at >= ?`, since.Unix(), since.Unix(),
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var out []NotifiedRef
+	var out []SeenRef
 	for rows.Next() {
-		var r NotifiedRef
-		if err := rows.Scan(&r.Company, &r.URL); err != nil {
+		var r SeenRef
+		if err := rows.Scan(&r.Key, &r.Company, &r.URL); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
