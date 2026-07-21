@@ -501,6 +501,10 @@ var realAlerts = []realAlert{
 	{"The Hartford ", "Associate Software Engineer - Tech Catalyst Program", "Columbus, OH", "https://thehartford.wd5.myworkdayjobs.com/Careers_External/job/Columbus-OH-Worth-Ave/Associate-Software-Engineer---Tech-Catalyst-Program--Columbus-_R2626154", "Software", "", true},
 	// #235
 	{"Magnatech", "Associate Developer", "Remote in USA", "https://magnatech.io/technology-careers/?gh_jid=4716011005", "Software", "", true},
+	// #236 sirened 2026-07-20. right year, wrong job: a sales role from
+	// the wide-net early-us google source riding the University Graduate
+	// include. google doesn't send categories, keywords have to catch it
+	{"Google", "Customer Growth Associate, Google Customer Solutions, University Graduate, 2027 Start (English)", "San Francisco, CA, USA | New York, NY, USA", "https://www.google.com/about/careers/applications/jobs/results/121628144896484038", "", "exclude:customer growth", false},
 }
 
 func TestRealAlertReplay(t *testing.T) {

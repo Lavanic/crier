@@ -122,6 +122,11 @@ filter:
     - support engineering
     - engineer/analyst
     - automation developer
+    # google's wide-net early-us source lists sales roles too, and their
+    # ads org (Google Customer Solutions) tags them University Graduate
+    - customer growth
+    - account strategist
+    - customer solutions
   # raw regexes checked against the title AND the url, workday slugs
   # leak start dates the title hides (vanguard's "2026-Start-Date")
   exclude_patterns:
