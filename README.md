@@ -2,6 +2,13 @@
   <img src="assets/town_crier.jpg" alt="a town crier ringing his bell" width="300">
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/platform-Linux%20%2F%20systemd-333?logo=linux&logoColor=white" alt="Linux / systemd">
+  <img src="https://img.shields.io/badge/binary-single%2C%20no%20CGO-3fb950" alt="single binary, no CGO">
+  <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License: MIT">
+</p>
+
 A single-binary Go bot that watches 128 sources (123 Greenhouse/Lever/Ashby
 company boards, 2 aggregator feeds, plus the Google and Apple careers sites
 directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. Postings from a hand-picked list of priority companies page me like an on-call, punching through DnD; everything else arrives as a normal ping. Tapping either opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
