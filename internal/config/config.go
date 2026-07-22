@@ -59,8 +59,22 @@ type Sources struct {
 	GitHub []Feed `yaml:"github"`
 	// big-tech careers pages parsed straight off their html, for the
 	// companies not on any public ats board
-	Google []Feed `yaml:"google"`
-	Apple  []Feed `yaml:"apple"`
+	Google  []Feed `yaml:"google"`
+	Apple   []Feed `yaml:"apple"`
+	Netflix []Feed `yaml:"netflix"`
+	// myworkdayjobs tenants (nvidia, ...), polled through their cxs api
+	Workday []WorkdaySource `yaml:"workday"`
+}
+
+// WorkdaySource is one myworkdayjobs tenant. unlike Feed it carries a
+// company label (the alert shows "NVIDIA", not the url) and a search
+// string that trims workday's large result set down to page 1
+type WorkdaySource struct {
+	Name           string `yaml:"name"`
+	Company        string `yaml:"company"`
+	URL            string `yaml:"url"` // the cxs /jobs endpoint
+	Search         string `yaml:"search"`
+	MinIntervalSec int    `yaml:"min_interval_seconds"`
 }
 
 // Feed is a named url polled on its own cadence: github aggregators,
@@ -155,11 +169,16 @@ func (c *Config) applyDefaults() {
 	if c.DBPath == "" {
 		c.DBPath = "crier.db"
 	}
-	for _, feeds := range [][]Feed{c.Sources.GitHub, c.Sources.Google, c.Sources.Apple} {
+	for _, feeds := range [][]Feed{c.Sources.GitHub, c.Sources.Google, c.Sources.Apple, c.Sources.Netflix} {
 		for i := range feeds {
 			if feeds[i].MinIntervalSec == 0 {
 				feeds[i].MinIntervalSec = defaultFeedIntervalSec
 			}
+		}
+	}
+	for i := range c.Sources.Workday {
+		if c.Sources.Workday[i].MinIntervalSec == 0 {
+			c.Sources.Workday[i].MinIntervalSec = defaultFeedIntervalSec
 		}
 	}
 }
@@ -167,7 +186,8 @@ func (c *Config) applyDefaults() {
 func (c *Config) validate() error {
 	n := len(c.Sources.Greenhouse) + len(c.Sources.Lever) +
 		len(c.Sources.Ashby) + len(c.Sources.GitHub) +
-		len(c.Sources.Google) + len(c.Sources.Apple)
+		len(c.Sources.Google) + len(c.Sources.Apple) +
+		len(c.Sources.Netflix) + len(c.Sources.Workday)
 	if n == 0 {
 		return errors.New("no sources configured")
 	}
@@ -186,11 +206,16 @@ func (c *Config) validate() error {
 			return fmt.Errorf("bad exclude pattern %q: %w", pat, err)
 		}
 	}
-	for _, feeds := range [][]Feed{c.Sources.GitHub, c.Sources.Google, c.Sources.Apple} {
+	for _, feeds := range [][]Feed{c.Sources.GitHub, c.Sources.Google, c.Sources.Apple, c.Sources.Netflix} {
 		for _, f := range feeds {
 			if f.Name == "" || f.URL == "" {
 				return fmt.Errorf("feed source needs both name and url, got name=%q url=%q", f.Name, f.URL)
 			}
+		}
+	}
+	for _, w := range c.Sources.Workday {
+		if w.Name == "" || w.Company == "" || w.URL == "" {
+			return fmt.Errorf("workday source needs name, company and url, got name=%q company=%q url=%q", w.Name, w.Company, w.URL)
 		}
 	}
 	return nil

@@ -135,6 +135,10 @@ filter:
     # tags are all wrong-year junk. workday urls keep the year even when
     # a feed strips it from the title (New-College-Grad-2026_JR2021230)
     - '(?i)grad(uate)?s?[\s_-]+202[0-6](\D|$)'
+    # nvidia writes the year first too ("2026 New College Grad"), which
+    # the grad-then-year rule above misses. req numbers like JR2026...
+    # are safe: no word boundary sits between a letter and the year
+    - '(?i)\b202[0-6][\s_-]+(new[\s_-]+)?(college[\s_-]+)?grad'
     - '(?i)early[\s_-]+career[\s_-]+202[0-6](\D|$)'
     # workday prefixes XMLNAME- when a title starts with a year, this
     # catches "2026 Raytheon Full-Time Software Engineer I" style reqs
@@ -498,3 +502,21 @@ sources:
     # titles with early career/graduate/engineer I markers get through
     - name: swe-us-newest
       url: https://jobs.apple.com/en-us/search?search=software%20engineer&sort=newest&location=united-states-USA
+  # netflix runs on eightfold, its careers api returns clean json.
+  # sort_by=timestamp is newest-create-first, and the api hard-caps at
+  # 10 results per page no matter what num says. 10 newest per 5-min
+  # poll is plenty: netflix would have to post 10+ roles inside one
+  # window for a new one to roll off page 1 before we see it
+  netflix:
+    - name: newest
+      url: https://explore.jobs.netflix.net/api/apply/v2/jobs?domain=netflix.com&sort_by=timestamp&start=0&num=10
+  # any myworkdayjobs tenant. url is the cxs /jobs endpoint, search
+  # trims the result set to page 1 (workday hard-caps limit at 20).
+  # note: nvidia's new-grad reqs are all tagged 2026 right now, so the
+  # wrong-year rule kills them until the 2027 cohort opens, that's fine,
+  # this mostly buys latency for when it does
+  workday:
+    - name: nvidia
+      company: NVIDIA
+      url: https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/jobs
+      search: software engineer new grad

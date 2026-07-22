@@ -1,6 +1,7 @@
 package sources
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -85,6 +86,38 @@ func getJSON(ctx context.Context, c *http.Client, url string, v any) error {
 	}
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return fmt.Errorf("GET %s: decoding json: %w", url, err)
+	}
+	return nil
+}
+
+// postJSON does a POST with a json body and decodes the response into
+// v. workday's cxs endpoints only answer to POST, everything else in
+// the app is GET, so this is the one place that speaks it.
+// retryablehttp buffers the body so it still replays on a 429/5xx retry
+func postJSON(ctx context.Context, c *http.Client, url string, body, v any) error {
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(buf))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST %s: unexpected status %s", url, resp.Status)
+	}
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("POST %s: decoding json: %w", url, err)
 	}
 	return nil
 }

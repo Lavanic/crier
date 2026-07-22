@@ -65,6 +65,37 @@ func TestSmokeAppleJobs(t *testing.T) {
 	t.Logf("%d jobs, first: %q (%s)", len(jobs), jobs[0].Title, jobs[0].Location)
 }
 
+func TestSmokeNetflixJobs(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	url := "https://explore.jobs.netflix.net/api/apply/v2/jobs?domain=netflix.com&sort_by=timestamp&start=0&num=50"
+	jobs, err := NewNetflixJobs(NewHTTPClient(), "newest", url, 5*time.Minute).Fetch(ctx)
+	if err != nil {
+		t.Fatalf("live fetch failed: %v", err)
+	}
+	if len(jobs) == 0 {
+		t.Fatal("0 jobs at netflix, suspicious")
+	}
+	t.Logf("%d jobs, first: %q (%s)", len(jobs), jobs[0].Title, jobs[0].Location)
+}
+
+func TestSmokeWorkdayNvidia(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	url := "https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/jobs"
+	jobs, err := NewWorkday(NewHTTPClient(), "nvidia", "NVIDIA", url, "software engineer new grad", 5*time.Minute).Fetch(ctx)
+	if err != nil {
+		t.Fatalf("live fetch failed: %v", err)
+	}
+	if len(jobs) == 0 {
+		t.Fatal("0 nvidia swe new-grad reqs, suspicious")
+	}
+	// spot-check the derived public url actually resolves the posting
+	t.Logf("%d jobs, first: %q (%s)\n  %s", len(jobs), jobs[0].Title, jobs[0].Location, jobs[0].URL)
+}
+
 func TestSmokeAshby(t *testing.T) {
 	client := NewHTTPClient()
 	for _, slug := range []string{"ramp", "linear"} {

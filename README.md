@@ -9,15 +9,15 @@
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License: MIT">
 </p>
 
-A single-binary Go bot that watches 128 sources (123 Greenhouse/Lever/Ashby
-company boards, 2 aggregator feeds, plus the Google and Apple careers sites
-directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. Postings from a hand-picked list of priority companies page me like an on-call, punching through DnD; everything else arrives as a normal ping. Tapping either opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
+A single-binary Go bot that watches 130 sources (123 Greenhouse/Lever/Ashby
+company boards, 2 aggregator feeds, plus the Google, Apple, Netflix and NVIDIA
+careers sites directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. Postings from a hand-picked list of priority companies page me like an on-call, punching through DnD; everything else arrives as a normal ping. Tapping either opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
 
 ```
 systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
        ├─ fan out: greenhouse / lever / ashby boards + aggregator feeds
-       │           + google / apple careers pages
+       │           + google / apple / netflix / nvidia careers pages
        ├─ filter:  include regexes + exclude keywords/patterns,
        │           us-only location gate, feed category gate
        ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
@@ -28,19 +28,22 @@ systemd timer (every 30s on a $4 vps)
 
 ## Why polling can be this fast
 
-The public, unauthenticated board APIs (Greenhouse, Lever, Ashby) are heavily
-cached and tolerate frequent reads. Polling them directly every 30s means
-~60-90s worst-case from posting to phone buzz. The two GitHub aggregator
-feeds ([SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions)
+Speed speed speed speed. The public, unauthenticated board APIs (Greenhouse,
+Lever, Ashby) are heavily cached and shrug off frequent reads, so crier hits
+them directly every 30 seconds. **From a recruiter hitting publish to a buzz in my pocket
+in ~60 seconds worst case**, usually less. Other folks refresh their slow
+aggregators or wait on email digests and apply the next time they check their inbox;
+polling the source itself collapses that to seconds, which is the difference
+between applicant #6 and applicant #600 when a role caps out the same afternoon
+it opens. The two GitHub aggregator feeds ([SimplifyJobs/New-Grad-Positions](https://github.com/SimplifyJobs/New-Grad-Positions)
 and [vanshb03/New-Grad-2027](https://github.com/vanshb03/New-Grad-2027),
-credit where due, they do the heavy scraping for big tech) act as the dragnet
-for companies not on the slug list, at their 5-30 minute refresh cadence.
+credit where due, they do heavy scraping for big tech) still ride along as
+a dragnet for companies not on the slug list, at their slower 5-30 minute
+refresh cadence.
 
-Google and Apple run their own career sites with no public board API, and
-the aggregators cover them patchily and late. Both sites embed their search
-results as JSON in the page HTML and serve it to a plain GET, so crier
-polls a date-sorted, server-side-filtered search page every 5 minutes and
-parses the embedded JSON. No headless browser needed.
+Google, Apple, Netflix and NVIDIA run their own career sites with no public
+board API, so crier scrapes each directly, polling a date-sorted,
+server-side-filtered slice every 5 minutes with no headless browser needed.
 
 ## Quick start (local)
 
@@ -124,8 +127,6 @@ real postings flip.
   loosening filters later never re-alerts old postings.
 - Pushover free quota is 10k messages/month, pooled per account. A sane
   filter uses a few hundred.
-- Deliberately not here (keeping v1 honest): LinkedIn/Indeed scraping,
-  Workday tenants, headless browsers, LLM filtering, dashboards, Docker.
 
 ## License
 

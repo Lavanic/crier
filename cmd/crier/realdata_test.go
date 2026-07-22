@@ -505,6 +505,10 @@ var realAlerts = []realAlert{
 	// the wide-net early-us google source riding the University Graduate
 	// include. google doesn't send categories, keywords have to catch it
 	{"Google", "Customer Growth Associate, Google Customer Solutions, University Graduate, 2027 Start (English)", "San Francisco, CA, USA | New York, NY, USA", "https://www.google.com/about/careers/applications/jobs/results/121628144896484038", "", "exclude:customer growth", false},
+	// #237 guards the year-first cohort form. nvidia's workday source
+	// writes "2026 New College Grad" (year before grad), which the
+	// grad-then-year rule missed until it leaked through in testing
+	{"NVIDIA", "Software Quality Assurance Engineer - 2026 New College Grad", "US, CA, Santa Clara", "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Software-Quality-Assurance-Engineer---2026-New-College-Grad_JR2019924", "", "2026 cohort, year-first", false},
 }
 
 func TestRealAlertReplay(t *testing.T) {

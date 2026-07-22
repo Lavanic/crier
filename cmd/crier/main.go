@@ -502,5 +502,15 @@ func buildSources(cfg *config.Config) []sources.Source {
 			client, feed.Name, feed.URL,
 			time.Duration(feed.MinIntervalSec)*time.Second))
 	}
+	for _, feed := range cfg.Sources.Netflix {
+		srcs = append(srcs, sources.NewNetflixJobs(
+			client, feed.Name, feed.URL,
+			time.Duration(feed.MinIntervalSec)*time.Second))
+	}
+	for _, w := range cfg.Sources.Workday {
+		srcs = append(srcs, sources.NewWorkday(
+			client, w.Name, w.Company, w.URL, w.Search,
+			time.Duration(w.MinIntervalSec)*time.Second))
+	}
 	return srcs
 }
