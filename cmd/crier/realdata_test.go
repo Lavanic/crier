@@ -509,6 +509,30 @@ var realAlerts = []realAlert{
 	// writes "2026 New College Grad" (year before grad), which the
 	// grad-then-year rule missed until it leaked through in testing
 	{"NVIDIA", "Software Quality Assurance Engineer - 2026 New College Grad", "US, CA, Santa Clara", "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Software-Quality-Assurance-Engineer---2026-New-College-Grad_JR2019924", "", "2026 cohort, year-first", false},
+	// #238-#245 come from the third audit: I replayed all 32,852 postings
+	// the filter had ever dropped, looking for good ones it lost.
+	// #238-#240 lead with the program word and no source ever alerted
+	// them, jump's whole us campus family was invisible
+	{"jumptrading", "Campus Software Engineer (Full-Time)", "Chicago", "https://www.jumptrading.com/hr/job?gh_jid=8000835", "", "", true},
+	// #239
+	{"jumptrading", "Campus AI Research Engineer (Full-Time)", "Chicago; New York", "https://www.jumptrading.com/hr/job?gh_jid=8052313", "", "", true},
+	// #240
+	{"jumptrading", "Campus Systems Engineer (Full-Time)", "Chicago", "https://www.jumptrading.com/hr/job?gh_jid=8008112", "", "", true},
+	// #241 the london twin of a role that already alerts, the campus
+	// rule must not outrank the location gate
+	{"Five Rings", "Campus Full Time 2027 - Software Developer - London", "London", "https://job-boards.greenhouse.io/fiveringsllc/jobs/5349905008", "", "location", false},
+	// #242 one part naming both countries. the gate used to see "Canada"
+	// and call the whole posting foreign, so this only reached me days
+	// later when the aggregator feed reposted it
+	{"cerebras", "Kernel Engineer - New Grad", "US and Canada Offices", "https://jobs.ashbyhq.com/cerebras/9c7da4b8-446b-4bf2-8d07-23241590bf2e", "", "", true},
+	// #243 "Level" is a whole word, the separator class can't jump it
+	{"Markon", "Software Engineer Level 1", "Odenton, MD", "https://careers-markon.icims.com/jobs/8089/job?mobile=true&needsRedirect=false", "Software", "", true},
+	// #244 guards the campus rule's role-word requirement, a trader is
+	// not a swe no matter which program posted it
+	{"jumptrading", "Campus Quantitative Trader (Full-Time)", "Chicago; New York", "https://www.jumptrading.com/hr/job?gh_jid=7982619", "", "no include, not a swe role", false},
+	// #245 guards the campus rule's anchor: "College of Engineering"
+	// sitting mid-title on a postdoc listing must stay dead
+	{"Carnegie Mellon University", "Postdoctoral Research Associate - College of Engineering - Electrical and Computer Engineering", "Pittsburgh, PA", "https://cmu.wd5.myworkdayjobs.com/cmu/job/Pittsburgh-PA/Postdoctoral-Research-Associate---College-of-Engineering---Electrical-and-Computer-Engineering_2024174", "AI/ML/Data", "no include, college is mid-title", false},
 }
 
 func TestRealAlertReplay(t *testing.T) {

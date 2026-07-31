@@ -125,6 +125,11 @@ func (f *Filter) dropByCategory(j sources.Job) bool {
 	return f.rescue == nil || !f.rescue.MatchString(j.Title)
 }
 
+// some listings name both countries inside ONE part that never gets
+// split, like cerebras' "US and Canada Offices". an explicit us
+// mention wins so those don't read as fully non-us
+var usSignal = regexp.MustCompile(`(?i)(\bus\b|\busa\b|\bu\.s\.?|\bunited\s+states\b)`)
+
 // dropByLocation kills a posting only when EVERY listed location is
 // non-us. empty or unrecognized locations pass, fail open
 func (f *Filter) dropByLocation(location string) bool {
@@ -141,7 +146,7 @@ func (f *Filter) dropByLocation(location string) bool {
 			continue
 		}
 		sawOne = true
-		if !f.nonUS.MatchString(part) {
+		if !f.nonUS.MatchString(part) || usSignal.MatchString(part) {
 			return false
 		}
 	}

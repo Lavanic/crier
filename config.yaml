@@ -33,6 +33,11 @@ filter:
     - '(?i)(software|engineer|developer|swe|sde).*\b202[67]\b'
     - '(?i)\b202[67]\b.*(software|engineer|developer|swe|sde)'
     - '(?i)(university|campus|college)\s*(grad(uate)?|hire|recruit)'
+    # jump trading and five rings lead with the program word instead
+    # ("Campus Software Engineer (Full-Time)"), which the rule above
+    # misses. anchored to the title start on purpose, otherwise a
+    # "College of Engineering" postdoc listing matches too
+    - '(?i)^\s*(campus|university|college)\b.*\b(software|engineer(ing)?|developer|swe|sde|programmer)\b'
     # qualifier-first titles the old set missed entirely:
     # "Graduate Software Engineer", TikTok's "ML Engineer Graduate",
     # "Junior Software Engineer", "Early Career Software Engineer"
@@ -49,7 +54,9 @@ filter:
     # noisiest line: catches "Android Engineer I" at spotify and
     # "ML Engineer 1" but also some hardware/field Engineer 1 roles.
     # delete this one first if the pings get too spammy
-    - '(?i)\bengineer\b[\s,:()\-–—/]*(i|1)\b'
+    # the optional "level" catches "Software Engineer Level 1", the
+    # separators alone can't jump over a whole word. II and 2 stay out
+    - '(?i)\bengineer\b[\s,:()\-–—/]*(level\s*)?(i|1)\b'
   # ...and gets dropped if it contains any of these whole words.
   # this list is what keeps recall-first from becoming spam.
   # "staff" and "lead" are deliberately NOT here: they killed real
