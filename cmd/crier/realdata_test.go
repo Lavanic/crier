@@ -533,6 +533,40 @@ var realAlerts = []realAlert{
 	// #245 guards the campus rule's anchor: "College of Engineering"
 	// sitting mid-title on a postdoc listing must stay dead
 	{"Carnegie Mellon University", "Postdoctoral Research Associate - College of Engineering - Electrical and Computer Engineering", "Pittsburgh, PA", "https://cmu.wd5.myworkdayjobs.com/cmu/job/Pittsburgh-PA/Postdoctoral-Research-Associate---College-of-Engineering---Electrical-and-Computer-Engineering_2024174", "AI/ML/Data", "no include, college is mid-title", false},
+	// #246-#256 come from the fourth audit, which checked the postings
+	// dropped since 2026-07-31 and cross-checked crier against the
+	// resumax new-grad list to see what it was covering that I wasn't.
+	// #246 the headline miss: CTC is a priority company and their whole
+	// entry-level track is titled plain "Associate Engineer"
+	{"Chicago Trading Company", "Associate Engineer", "Chicago, IL | NYC", "https://job-boards.greenhouse.io/chicagotradingcampus/jobs/4716937005", "Software", "", true},
+	// #247 the associate rule has to reach across a two-word specialty,
+	// otherwise every "Associate Forward Deployed Engineer" stays dead
+	{"Kognitos", "Associate Forward Deployed Engineer", "Mountain View, CA", "https://jobs.ashbyhq.com/Kognitos/1f7775f7-eb11-4dca-b30c-bbd077d7d1f9/application?embed=true", "Software", "", true},
+	// #248
+	{"The New York Times", "Associate Android Engineer", "NYC", "https://job-boards.greenhouse.io/thenewyorktimes/jobs/4636765005", "", "", true},
+	// #249 and #250 guard the keywords I chose NOT to add. "application
+	// engineer" and "systems engineer" both look like noise in bulk but
+	// each one kills a real cohort role, so they stay out of the list
+	{"Appian", "Associate Application Engineer", "McLean, VA", "https://job-boards.greenhouse.io/appian/jobs/7951022", "", "", true},
+	// #250
+	{"Blissway", "Embedded Systems Engineer New Grad", "Denver, CO", "https://jobs.ashbyhq.com/blissway/51d6d839-9801-4436-bfc2-918bae428ed8/application?embed=true", "Hardware", "", true},
+	// #251 bytedance files its new grad research roles under "Graduate"
+	// with no engineer word anywhere in the title
+	{"ByteDance", "Research Graduate - AI Infra Compute", "Seattle, WA", "https://jobs.bytedance.com/en/position/7667304540048787765/detail", "AI/ML/Data", "", true},
+	// #252 the other half of that rule: "research" only counts when it
+	// comes BEFORE "graduate", or every university assistantship matches
+	{"Texas A&M University System", "Graduate Research Assistant", "College Station, TX", "https://tamus.wd1.myworkdayjobs.com/System-wide_External/job/College-Station-TX/RSSI-Graduate-Research-Assistant_R-089229", "AI/ML/Data", "no include, graduate comes first", false},
+	// #253 and #254 are what the new exclude keywords are for, both
+	// showed up only because the associate rule got wider
+	{"Iowa State University", "Chemical Engineering Assistant/Associate/Full Professor", "Ames, IA", "https://isu.wd1.myworkdayjobs.com/IowaStateJobs/job/Ames-IA/Chemical-Engineering---Assistant-Associate-Full-Professor_R19314", "AI/ML/Data", "professor", false},
+	// #254
+	{"Celonis", "Associate Value Engineer - AI-Driven Data Science & Analytics - Orbit Program", "NYC", "https://job-boards.greenhouse.io/celonis/jobs/7725788003?gh_jid=7725788003", "", "value engineer", false},
+	// #255 marshall wace runs its grad hiring off a second board, their
+	// main one is hr postings only. the resumax list is what turned it up
+	{"mw-tech-grad", "Software/Infrastructure Graduate - 2027 - New York", "New York", "https://job-boards.greenhouse.io/mw-tech-grad/jobs/8646937002", "", "", true},
+	// #256 same req in london, the widened associate/graduate rules must
+	// still lose to the location gate
+	{"mw-tech-grad", "Software/Infrastructure Graduate - 2027 - London", "London", "https://job-boards.greenhouse.io/mw-tech-grad/jobs/8645263002", "", "location", false},
 }
 
 func TestRealAlertReplay(t *testing.T) {

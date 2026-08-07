@@ -42,14 +42,22 @@ filter:
     # "Graduate Software Engineer", TikTok's "ML Engineer Graduate",
     # "Junior Software Engineer", "Early Career Software Engineer"
     - '(?i)\bgrad(uate)?\b.*\b(software|engineer|developer|swe|sde|machine\s+learning)\b'
-    - '(?i)\b(software|engineer(ing)?|developer|swe|sde|machine\s+learning|technology)\b.*\bgrad(uate)?\b'
+    # "research" is only in the second line, not the first. bytedance
+    # names its new grad roles "Research Scientist Graduate", but
+    # "Graduate Research Assistant" is a university job, not for me
+    - '(?i)\b(software|engineer(ing)?|developer|swe|sde|machine\s+learning|technology|research)\b.*\bgrad(uate)?\b'
     - '(?i)(\bjunior\b.*\b(engineer|developer|swe|sde)\b|\b(engineer|developer)\b.*\bjunior\b)'
     - '(?i)early[\s-]+(in[\s-]+)?career'
     - '(?i)recent\s+grad(uate)?'
     - '(?i)emerging\s+talent'
     - '(?i)\bbachelors?\b'
     - '(?i)(leadership|technology|engineering|software|digital)\s+development\s+program'
-    - '(?i)(\bassociate\b.*\b(software|developer)\b|\b(software|developer)\b.*\bassociate\b|\bassociate\b\s+((ai|ml|machine\s+learning|deep\s+learning|data)\s+)+engineer\b)'
+    # "associate" is a real entry-level marker at trading firms and
+    # startups, but the old rule only allowed a fixed list of specialties
+    # between it and "engineer", so CTC's plain "Associate Engineer" and
+    # "Associate Forward Deployed Engineer" both died. the {0,30} keeps
+    # it from leaping across a whole title into an unrelated word
+    - '(?i)(\bassociate\b.*\b(software|developer)\b|\b(software|developer)\b.*\bassociate\b|\bassociate\b[\s\w/&.,()-]{0,30}\bengineer\b|\bengineer(ing)?\b[\s\w/&.,()-]{0,20}\bassociate\b)'
     - '(?i)(\b(software|developer|engineer(ing)?|tech(nology)?)\b.*\b(apprentice(ship)?|residency|fellowship|rotation(al)?)\b|\b(apprentice(ship)?|residency|fellowship|rotation(al)?)\b.*\b(software|developer|engineer(ing)?|tech(nology)?)\b)'
     # noisiest line: catches "Android Engineer I" at spotify and
     # "ML Engineer 1" but also some hardware/field Engineer 1 roles.
@@ -134,6 +142,14 @@ filter:
     - customer growth
     - account strategist
     - customer solutions
+    # third audit 2026-08-06: the widened "associate" rule pulls in a few
+    # non-swe families, these four kill them and cost zero real titles.
+    # NOT "application/design/systems engineer", those read as noise but
+    # each one kills real new-grad roles (appian, micron, blissway)
+    - professor
+    - value engineer # pre-sales, not an ic engineering role
+    - service engineer # "field service" already covers the field variant
+    - engineering support
   # raw regexes checked against the title AND the url, workday slugs
   # leak start dates the title hides (vanguard's "2026-Start-Date")
   exclude_patterns:
@@ -201,6 +217,50 @@ filter:
     - nz
     - rwanda
     - kigali
+    # fourth audit: places that leaked because only the country was on
+    # the list, or because nothing covered them at all. marshall wace's
+    # hong kong grad role is what made this obvious.
+    # NOT "vienna", every one of those in my db is Vienna, VA, and NOT
+    # "berlin", there are Berlins in NH, CT and MD
+    - hong kong
+    - deutschland
+    - munich
+    - frankfurt
+    - switzerland
+    - zurich
+    - austria
+    - sweden
+    - stockholm
+    - denmark
+    - copenhagen
+    - norway
+    - finland
+    - iceland
+    - reykjavik
+    - portugal
+    - lisbon
+    - italy
+    - milan
+    - korea
+    - seoul
+    - malaysia
+    - kuala lumpur
+    - vietnam
+    - hanoi
+    - ho chi minh
+    - philippines
+    - manila
+    - indonesia
+    - jakarta
+    - thailand
+    - bangkok
+    - uae
+    - dubai
+    - abu dhabi
+    - qatar
+    - doha
+    - saudi arabia
+    - riyadh
   # simplify feed discipline tags to drop, matched as substrings so
   # legacy "Hardware Engineering" counts. boards have no tag, always pass
   exclude_categories:
@@ -335,6 +395,8 @@ display_names:
   posthog: PostHog
   Hudson River Trading: HRT
   Chicago Trading Company: CTC
+  mw-tech-grad: Marshall Wace
+  sphinxdefense: Sphinx Defense
 
 sources:
   greenhouse:
@@ -418,6 +480,12 @@ sources:
     - riotgames
     - epicgames
     - faire
+    # found by auditing the resumax new-grad list against what crier
+    # already covers, these four were the only real us roles in it that
+    # no source of mine could ever have reached
+    - mw-tech-grad # marshall wace's grad program, their main board is hr only
+    - appian # runs a proper 2027 graduate cohort out of mclean va
+    - sphinxdefense
   # canva: 404 on lever AND greenhouse, no public board found, the
   # github feeds cover them. boomsupersonic: 404 everywhere, dropped.
   # rippling: uses their own ats, feeds cover them.
@@ -478,6 +546,8 @@ sources:
     - posthog
     - kalshi
     - vanta
+    - handshake # the campus recruiting company, they hire new grads too
+    - blissway
     - thinking-machines-lab # 0 jobs listed as of 2026-07, expect the WARN
   github:
     - name: simplifyjobs
