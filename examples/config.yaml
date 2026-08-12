@@ -1,8 +1,10 @@
 # crier example config
 # copy me to the repo root as config.yaml and edit away.
-# pushover creds do NOT go here, they go in config.local.yaml
-# (gitignored, pushover key only) or CRIER_PUSHOVER_APP_TOKEN /
-# CRIER_PUSHOVER_USER_KEY env vars. env wins over files
+# creds do NOT go here, they go in config.local.yaml (gitignored) or
+# env vars, and env wins over files:
+#   pushover:  CRIER_PUSHOVER_APP_TOKEN / CRIER_PUSHOVER_USER_KEY
+#   instagram: CRIER_IG_SESSION_ID / CRIER_IG_DS_USER_ID /
+#              CRIER_IG_CSRF_TOKEN
 #
 # coverage model: slugs are the fast lane (~60s latency) for companies
 # I care about. the github feeds are the dragnet that catches startups
@@ -389,3 +391,14 @@ sources:
     # apple rarely labels roles new-grad, expect low volume
     - name: swe-us-newest
       url: https://jobs.apple.com/en-us/search?search=software%20engineer&sort=newest&location=united-states-USA
+  # zero2sudo posts openings to his instagram story, we mine the link
+  # stickers. burner cookies go in config.local.yaml, never here.
+  # user_id is the numeric account id, not the handle: a handle answers
+  # 200 with an empty reel, so it looks healthy and finds nothing
+  instagram:
+    - name: zero2sudo
+      user_id: "50350974961"
+      # the one source that bans you for asking too often. jitter is
+      # rolled per tick, a perfect grid is an easy bot tell
+      min_interval_seconds: 300
+      jitter_seconds: 150

@@ -185,3 +185,19 @@ func TestSendDigest(t *testing.T) {
 		t.Error("digest should carry no url")
 	}
 }
+
+func TestBodyNamesTheStorySource(t *testing.T) {
+	tests := []struct{ source, want string }{
+		{"instagram:zero2sudo", "New York · via @zero2sudo"},
+		// board sources keep their raw name, that's how I tell a 60s
+		// direct hit from a slower aggregator find
+		{"greenhouse:stripe", "New York · greenhouse:stripe"},
+		{"github:simplifyjobs", "New York · github:simplifyjobs"},
+	}
+	for _, tt := range tests {
+		got := body(sources.Job{Location: "New York", Source: tt.source})
+		if got != tt.want {
+			t.Errorf("body(%q) = %q, want %q", tt.source, got, tt.want)
+		}
+	}
+}

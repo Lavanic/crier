@@ -258,6 +258,24 @@ func TestNoExcludeKeywords(t *testing.T) {
 	}
 }
 
+// a story link we couldn't get a title for is a link we know nothing
+// about. it dies here, and shows up in `make stories` for review
+func TestUntitledJobNeverAlerts(t *testing.T) {
+	f, err := New(Config{Include: include, ExcludeKeywords: exclude})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range []string{
+		"https://job-boards.greenhouse.io/ctc/jobs/4716937005",
+		"https://careers.ibm.com/en_US/careers/JobDetail?jobId=128497",
+		"https://lifeattiktok.com/search/7672554809555192117",
+	} {
+		if f.Match(sources.Job{URL: u}) {
+			t.Errorf("untitled link alerted: %s", u)
+		}
+	}
+}
+
 func TestBadPatternErrors(t *testing.T) {
 	if _, err := New(Config{Include: []string{"([unclosed"}}); err == nil {
 		t.Error("expected error for a bad include pattern")

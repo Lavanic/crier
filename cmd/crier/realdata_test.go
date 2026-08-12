@@ -567,6 +567,107 @@ var realAlerts = []realAlert{
 	// #256 same req in london, the widened associate/graduate rules must
 	// still lose to the location gate
 	{"mw-tech-grad", "Software/Infrastructure Graduate - 2027 - London", "London", "https://job-boards.greenhouse.io/mw-tech-grad/jobs/8645263002", "", "location", false},
+	// #257-#265 come from the fifth audit, the first one that went
+	// looking for PRECISION rather than recall. every candidate keyword
+	// was checked against the 1,233 titles that pass the filter today.
+	// #257 the one that started it, an em lab rig test role
+	{"epirus", "Associate Test Engineer, Electromagnetic Laboratory", "Lawton, Oklahoma, United States", "https://www.epirusinc.com/open-roles?gh_jid=6113129004", "", "test engineer", false},
+	// #258 and #259 guard the keywords I did NOT add. "avionics" and
+	// "spacecraft" read like pure hardware in bulk but each one kills
+	// real embedded swe work. this blue origin row only dies on the
+	// wrong-year rule, so the same req comes back for the 2027 cohort
+	// and an avionics keyword would silently eat it then
+	{"Blue Origin", "Avionics / Embedded Software Engineer 1 - Early Career", "LA | Kent, WA", "https://blueorigin.wd5.myworkdayjobs.com/blueorigin/job/Greater-Seattle-Area/Avionics---Embedded-Software-Engineer-I---Early-Career--2026-Starts-_R70055", "Hardware", "2026 start in url", false},
+	// #259 boeing's is the live one, it survives on its own
+	{"The Boeing Company", "Spacecraft Software Engineer Associate - Millennium Space Systems", "El Segundo, CA", "https://boeing.wd1.myworkdayjobs.com/EXTERNAL_CAREERS/job/USA---El-Segundo-CA/Spacecraft-Software-Engineer--Associate-or-Mid-Level---Millennium-Space-Systems_JR2026512895", "Software", "", true},
+	// #260 support desk work, not an ic role
+	{"Micron Technology", "IT Software Support Engineer New Grad", "Boise, ID", "https://micron.wd1.myworkdayjobs.com/External/job/Boise-ID---ID1/New-College-Grad---IT-Software-Support-Engineer_JR108465", "Software", "support engineer", false},
+	// #261 HRT is a priority company, so this one sirened through dnd.
+	// production support is still not the job I want, and a keyword is
+	// the only thing that stops a priority company from waking me up
+	{"wehrtyou", "Junior Electronic Trading Support Engineer", "Austin, TX, United States; Dublin, Ireland; New York, NY, United States", "https://www.hudsonrivertrading.com/careers/job/?gh_jid=7116458", "", "support engineer", false},
+	// #262 customer support with a new grad tag on it
+	{"robinhood", "Customer Experience Associate (New Grad)", "Westlake, TX", "https://boards.greenhouse.io/robinhood/jobs/8122623?t=gh_src=&gh_jid=8122623", "", "customer experience associate", false},
+	// #263 which is why the keyword is the full phrase: bare "customer
+	// experience" would take this real qualtrics swe role with it
+	{"Qualtrics", "Software Development Engineer I, Customer Experience", "Seattle, WA", "https://www.qualtrics.com/careers/us/en/job/QUALUS6889008EXTERNALENUS/Software-Development-Engineer-I-Customer-Experience-Seattle", "", "", true},
+	// #264 pre-sales, the field variant only so appian's cohort role
+	// (row #249) keeps working
+	{"Sandisk", "Field Application Engineer New Grad", "Milpitas, CA", "https://jobs.smartrecruiters.com/Sandisk/744000136097669", "", "field application engineer", false},
+	// #265 also pre-sales, snowflake and appian both post these
+	{"snowflake", "Associate Solution Engineer", "FR-Paris", "https://jobs.ashbyhq.com/snowflake/ed94cba6-2a71-4488-b2d8-901bb3154a68/application", "", "solution engineer", false},
+	// #266 and the last keyword I rejected: esri's arcgis sdk role is
+	// real software work, so "product engineer" stays out of the list
+	{"Esri", "Product Engineer 1, ArcGIS Maps SDKs", "West Redlands, Redlands, CA", "https://www.esri.com/careers/5198108007?gh_jid=5198108007", "", "", true},
+}
+
+// story links get their own table so the 256-row audit corpus stays
+// untouched and its keep/kill count still means what it did before
+// instagram existed. every row is real, pulled off his story.
+// title is whatever the three passes recovered (url slug, board api,
+// page metadata), empty when all three came up short
+var storyLinkAlerts = []realAlert{
+	// #1 title off the url slug. his stories carry internships too and
+	// they die exactly like simplify's do
+	{"peak6", "Trading Bootcamp Micro Internship Summer 2027", "Chicago Illinois United States Of America", "https://careers.peak6.com/jobs/business-operation-services/chicago-illinois-united-states-of-america/trading-bootcamp-micro-internship-summer-2027/JR105057", "", "exclude:internship", false},
+	// #2 the one that made me add the page-metadata lookup. the url is
+	// a bare numeric id, so without og:title this leaked through as a
+	// "we know nothing, trust him" alert. it's a PM internship
+	{"lifeattiktok", "Product Manager Intern (Signal and Identity Product) - 2027 Summer", "", "https://lifeattiktok.com/search/7672554809555192117", "", "exclude:intern", false},
+	// #3 ashby uuid with no words in it, title came back off the board
+	{"uniswap", "Software Engineer - Early Career", "New York", "https://jobs.ashbyhq.com/uniswap/fb4d4137-f003-4669-beb7-2a5caca88012", "", "", true},
+	// #4 apple's slug flattens "IS&T" to "is-t", ugly but it still
+	// reads as a real early career role and the link is right
+	{"apple", "Software Engineer Is T Early Career Opportunities", "", "https://jobs.apple.com/en-us/details/200677377-0157/software-engineer-is-t-early-career-opportunities", "", "", true},
+	// #5 ibm answers 202 with an empty body to anything that isn't a
+	// browser, so nothing can title this. no title, no alert
+	{"ibm", "", "", "https://careers.ibm.com/en_US/careers/JobDetail?jobId=128497", "", "no title anywhere", false},
+	// #6 include matches on "Engineering ... 2027", the exclude is what
+	// actually kills it. the layer that catches the most of his links
+	{"deshaw", "Systems Engineering Intern New York Summer 2027 5916", "", "https://www.deshaw.com/careers/systems-engineering-intern-new-york-summer-2027-5916", "", "exclude:intern", false},
+	// #7 a summer analyst role with no engineering word anywhere
+	{"aqr", "2027 Quantitative Prediction Markets Research Summer Analyst", "Greenwich Ct", "https://careers.aqr.com/jobs/open-positions/greenwich-ct/2027-quantitative-prediction-markets-research-summer-analyst/8122378", "", "no include match", false},
+	// #8 bare greenhouse link after the board lookup filled it in
+	{"chicagotradingcampus", "Associate Engineer", "Chicago, IL", "https://job-boards.greenhouse.io/chicagotradingcampus/jobs/4716937005", "", "", true},
+	// #9 a good title still loses to the location gate
+	{"mw-tech-grad", "Software/Infrastructure Graduate - 2027", "London", "https://job-boards.greenhouse.io/mw-tech-grad/jobs/8645263002", "", "location", false},
+	// #10 wrong cohort year read straight off the url slug
+	{"acme", "New Grad Software Engineer", "", "https://acme.com/jobs/new-grad-2026/98765", "", "2026 grad in url", false},
+}
+
+func TestStoryLinkReplay(t *testing.T) {
+	cfg, err := config.Load("../../config.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := filter.New(filter.Config{
+		Include:                cfg.Filter.Include,
+		ExcludeKeywords:        cfg.Filter.ExcludeKeywords,
+		ExcludePatterns:        cfg.Filter.ExcludePatterns,
+		ExcludeLocations:       cfg.Filter.ExcludeLocations,
+		ExcludeCategories:      cfg.Filter.ExcludeCategories,
+		CategoryRescueKeywords: cfg.Filter.CategoryRescueKeywords,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, a := range storyLinkAlerts {
+		job := sources.Job{
+			Company:  a.company,
+			Title:    a.title,
+			Location: a.location,
+			URL:      a.url,
+			Category: a.category,
+		}
+		if got := f.Match(job); got != a.keep {
+			if a.keep {
+				t.Errorf("story #%d GOOD link lost: %s | %q | %s", i+1, a.company, a.title, a.url)
+			} else {
+				t.Errorf("story #%d junk link still alerting (expected kill: %s): %s | %q | %s",
+					i+1, a.killedBy, a.company, a.title, a.url)
+			}
+		}
+	}
 }
 
 func TestRealAlertReplay(t *testing.T) {

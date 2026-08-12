@@ -45,7 +45,19 @@ var migrations = []string{
 	// so backlog retries re-filter with the same category the fresh
 	// fetch had, old rows default to ''
 	`ALTER TABLE jobs ADD COLUMN category TEXT NOT NULL DEFAULT ''`,
+	// board titles for story links that arrived without one, so we
+	// don't ask greenhouse the same question 288 times a day
+	`CREATE TABLE IF NOT EXISTS link_titles (
+		url        TEXT PRIMARY KEY,
+		title      TEXT NOT NULL,
+		location   TEXT NOT NULL,
+		fetched_at INTEGER NOT NULL
+	)`,
 }
+
+// long enough that a repost never re-asks, short enough that a
+// retitled posting eventually corrects itself
+const titleCacheTTL = 7 * 24 * time.Hour
 
 type Store struct {
 	db *sql.DB
@@ -151,13 +163,46 @@ func (s *Store) UnnotifiedSince(since time.Time) ([]PendingAlert, error) {
 	var out []PendingAlert
 	for rows.Next() {
 		var p PendingAlert
-		if err := rows.Scan(&p.Key, &p.Job.Company, &p.Job.Title,
-			&p.Job.URL, &p.Job.Source, &p.Job.Location, &p.Job.Category); err != nil {
+		if err := rows.Scan(&p.Key, &p.Job.Company, &p.Job.Title, &p.Job.URL,
+			&p.Job.Source, &p.Job.Location, &p.Job.Category); err != nil {
 			return nil, err
 		}
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// a live row counts even with an empty title, that's a posting the
+// board 404'd on and asking again won't change it
+func (s *Store) LookupTitle(url string) (title, location string, ok bool, err error) {
+	var fetchedAt int64
+	err = s.db.QueryRow(
+		`SELECT title, location, fetched_at FROM link_titles WHERE url = ?`, url,
+	).Scan(&title, &location, &fetchedAt)
+	if err == sql.ErrNoRows {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	if time.Since(time.Unix(fetchedAt, 0)) > titleCacheTTL {
+		return "", "", false, nil
+	}
+	return title, location, true, nil
+}
+
+// upsert, not insert-or-ignore, so a stale row refreshes instead of
+// pinning the old title forever
+func (s *Store) SaveTitle(url, title, location string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO link_titles (url, title, location, fetched_at) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(url) DO UPDATE SET
+		   title = excluded.title,
+		   location = excluded.location,
+		   fetched_at = excluded.fetched_at`,
+		url, title, location, time.Now().Unix(),
+	)
+	return err
 }
 
 // SeenRef is just enough of a recorded job for main's cross-post

@@ -154,7 +154,7 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 		}
 	}
 
-	srcs := buildSources(cfg)
+	srcs := buildSources(cfg, st)
 
 	ctx, cancel := context.WithTimeout(context.Background(), tickTimeout)
 	defer cancel()
@@ -188,6 +188,13 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 				if ok && now.Sub(last) < src.MinInterval() {
 					return nil
 				}
+				// stamp the ATTEMPT, not the success. a failed source
+				// used to retry next tick, which for instagram means
+				// hammering it every 30s right when something is already
+				// wrong. the interval has to be a floor either way
+				if err := st.SetPolled(src.Name(), now); err != nil {
+					return err
+				}
 			}
 
 			jobs, err := src.Fetch(ctx)
@@ -199,11 +206,6 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 			fetchOK.Add(1)
 			if len(jobs) == 0 {
 				log.Warn("source returned 0 jobs", "source", src.Name())
-			}
-			if gated {
-				if err := st.SetPolled(src.Name(), now); err != nil {
-					return err
-				}
 			}
 
 			newCount, matchCount := 0, 0
@@ -474,8 +476,9 @@ func displayName(names map[string]string, company string) string {
 }
 
 // turns config entries into live Source values. the loop bodies are
-// the ONLY place in main that knows concrete source types
-func buildSources(cfg *config.Config) []sources.Source {
+// the ONLY place in main that knows concrete source types.
+// st is just for the instagram title cache
+func buildSources(cfg *config.Config, st *store.Store) []sources.Source {
 	client := sources.NewHTTPClient()
 	var srcs []sources.Source
 	for _, slug := range cfg.Sources.Greenhouse {
@@ -511,6 +514,22 @@ func buildSources(cfg *config.Config) []sources.Source {
 		srcs = append(srcs, sources.NewWorkday(
 			client, w.Name, w.Company, w.URL, w.Search,
 			time.Duration(w.MinIntervalSec)*time.Second))
+	}
+	if len(cfg.Sources.Instagram) > 0 {
+		// its own client, the shared one retries 429s
+		igClient := sources.NewInstagramClient()
+		session := sources.Session{
+			SessionID: cfg.Instagram.SessionID,
+			DsUserID:  cfg.Instagram.DsUserID,
+			CSRFToken: cfg.Instagram.CSRFToken,
+		}
+		for _, ig := range cfg.Sources.Instagram {
+			src := sources.NewInstagramStories(igClient, ig.Name, ig.UserID, session,
+				time.Duration(ig.MinIntervalSec)*time.Second,
+				time.Duration(ig.JitterSec)*time.Second)
+			src.SetEnricher(sources.NewEnricher(st))
+			srcs = append(srcs, src)
+		}
 	}
 	return srcs
 }

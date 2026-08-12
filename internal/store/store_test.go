@@ -236,6 +236,72 @@ func TestMigratesLegacySchema(t *testing.T) {
 	}
 }
 
+func TestTitleCache(t *testing.T) {
+	s, _ := openTemp(t)
+	const link = "https://job-boards.greenhouse.io/ctc/jobs/4716937005"
+
+	if _, _, ok, err := s.LookupTitle(link); err != nil || ok {
+		t.Fatalf("empty cache returned ok=%v err=%v", ok, err)
+	}
+	if err := s.SaveTitle(link, "Associate Engineer", "Chicago, IL"); err != nil {
+		t.Fatal(err)
+	}
+	title, loc, ok, err := s.LookupTitle(link)
+	if err != nil || !ok {
+		t.Fatalf("lookup after save: ok=%v err=%v", ok, err)
+	}
+	if title != "Associate Engineer" || loc != "Chicago, IL" {
+		t.Errorf("got %q / %q", title, loc)
+	}
+
+	// a 404 caches an empty title so we stop asking. "found a row" and
+	// "title is empty" are different answers
+	const gone = "https://job-boards.greenhouse.io/ctc/jobs/999"
+	if err := s.SaveTitle(gone, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok, _ := s.LookupTitle(gone); !ok {
+		t.Error("a cached empty title should still count as a hit")
+	}
+
+	// re-saving refreshes rather than colliding on the primary key
+	if err := s.SaveTitle(link, "Associate Engineer II", "NYC"); err != nil {
+		t.Fatal(err)
+	}
+	if title, _, _, _ := s.LookupTitle(link); title != "Associate Engineer II" {
+		t.Errorf("title after re-save = %q", title)
+	}
+}
+
+func TestTitleCacheExpires(t *testing.T) {
+	s, path := openTemp(t)
+	const link = "https://job-boards.greenhouse.io/ctc/jobs/1"
+	if err := s.SaveTitle(link, "Associate Engineer", "Chicago, IL"); err != nil {
+		t.Fatal(err)
+	}
+	s.Close()
+
+	// backdate the row past the ttl instead of sleeping a week
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := time.Now().Add(-titleCacheTTL - time.Hour).Unix()
+	if _, err := db.Exec(`UPDATE link_titles SET fetched_at = ?`, stale); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+
+	s2, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s2.Close()
+	if _, _, ok, _ := s2.LookupTitle(link); ok {
+		t.Error("a stale row should miss so the board gets asked again")
+	}
+}
+
 func TestPollTimestamps(t *testing.T) {
 	s, _ := openTemp(t)
 

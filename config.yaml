@@ -150,6 +150,41 @@ filter:
     - value engineer # pre-sales, not an ic engineering role
     - service engineer # "field service" already covers the field variant
     - engineering support
+    # fifth audit 2026-08-12, first one looking at PRECISION instead of
+    # recall. checked every candidate against the 1,233 titles that pass
+    # the filter today, these nine cost zero real roles between them
+    - test engineer # 7 kills, all avionics/rf/environmental rigs
+    - support engineer # 12 kills, all IT and desk support. this also
+    # takes HRT's "Junior Electronic Trading Support Engineer", which
+    # sirened through dnd as a priority company. deliberate, it's
+    # production support and not the job I want
+    - field application engineer # pre-sales. NOT bare "application
+    # engineer", that one kills appian's real new grad cohort role
+    - solution engineer
+    - solutions engineer
+    - customer engineer # gcp-style pre-sales, not an ic role
+    - customer experience associate # NOT bare "customer experience",
+    # that kills a real "SDE I, Customer Experience" team role
+    - business technology
+    - weld engineer
+    - aerodynamics
+    # the non-swe tail of the widened "associate" rule. that rule is
+    # worth 104 titles including CTC's "Associate Engineer" and every
+    # "Associate Forward Deployed Engineer", so it stays. these seven
+    # kill the hardware/IT stragglers it drags along, 13 titles, no
+    # software lost
+    - bi engineer # "business intelligence" already covers the long form
+    - analog
+    - rf engineer
+    - radio frequency
+    - hardware design # "hardware engineer" misses the design variant
+    - electronics packaging
+    - microsoft 365
+    # NOT "vision systems": machine vision reads like hardware but
+    # computer vision roles are real ml work
+    # NOT "avionics" or "spacecraft": both read like pure hardware but
+    # each kills two real embedded swe roles at rocket lab and boeing.
+    # NOT "product engineer" either, esri's arcgis sdk role is software
   # raw regexes checked against the title AND the url, workday slugs
   # leak start dates the title hides (vanguard's "2026-Start-Date")
   exclude_patterns:
@@ -397,6 +432,13 @@ display_names:
   Chicago Trading Company: CTC
   mw-tech-grad: Marshall Wace
   sphinxdefense: Sphinx Defense
+  # story links derive the company off the url host, which gives some
+  # rough slugs. these all showed up in the first live pull
+  aqr: AQR
+  ibm: IBM
+  deshaw: D. E. Shaw
+  lifeattiktok: TikTok
+  capitalonecareers: Capital One
 
 sources:
   greenhouse:
@@ -597,3 +639,12 @@ sources:
       company: NVIDIA
       url: https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/jobs
       search: software engineer new grad
+  # zero2sudo posts openings to his story, which reaches companies no
+  # slug list of mine will. we read the link stickers off instagram's
+  # own api, burner cookies live in config.local.yaml.
+  # user_id is the numeric account id, it survives a rename
+  instagram:
+    - name: zero2sudo
+      user_id: "50350974961"
+      min_interval_seconds: 300
+      jitter_seconds: 150

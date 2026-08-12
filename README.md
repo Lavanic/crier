@@ -18,6 +18,7 @@ systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
        ├─ fan out: greenhouse / lever / ashby boards + aggregator feeds
        │           + google / apple / netflix / nvidia careers pages
+       │           + link stickers off @zero2sudo's instagram story
        ├─ filter:  include regexes + exclude keywords/patterns,
        │           us-only location gate, feed category gate
        ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
@@ -45,6 +46,12 @@ Google, Apple, Netflix and NVIDIA run their own career sites with no public
 board API, so crier scrapes each directly, polling a date-sorted,
 server-side-filtered slice every 5 minutes with no headless browser needed.
 
+[@zero2sudo](https://instagram.com/zero2sudo) does openings discovery
+full-time off crowdsourced tips and drops the apply link on his Instagram
+story which surfaces companies no slug list reaches. crier reads those link
+stickers off Instagram's own web API (session cookie + app-id header, no
+headless browser) once per 5 minutes with jitter, from a burner account.
+
 ## Quick start (local)
 
 Needs Go 1.26+.
@@ -55,6 +62,10 @@ cat > config.local.yaml <<EOF         # gitignored creds
 pushover:
   app_token: your-app-token
   user_key: your-user-key
+instagram:                            # optional, for the story dragnet
+  session_id: from-a-burner-accounts-cookies
+  ds_user_id: same-place
+  csrf_token: same-place
 EOF
 
 make dry-run   # seeds the db, logs would-notify jobs, sends nothing
@@ -123,6 +134,11 @@ real postings flip.
 
 - A source erroring or returning 0 jobs logs a WARN with the source name.
   One dead board never kills a tick.
+- `min_interval_seconds` is a floor whether the fetch succeeded or not, so a
+  failing source backs off instead of retrying every 30s.
+- An expired Instagram cookie fails silently: the tick still exits 0 and the
+  dead-man switch stays green. It logs `session cookie rejected`, so grep for
+  that if the story links go quiet.
 - The db is append-only memory: jobs are marked seen *before* filtering, so
   loosening filters later never re-alerts old postings.
 - Pushover free quota is 10k messages/month, pooled per account. A sane

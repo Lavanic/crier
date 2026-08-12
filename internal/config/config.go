@@ -31,6 +31,9 @@ type Config struct {
 	// hours. matched case-insensitively against the display name
 	PriorityCompanies []string `yaml:"priority_companies"`
 	Pushover          Pushover `yaml:"pushover"`
+	// burner cookies for the instagram source. creds, so same rules as
+	// pushover: config.local.yaml or env, never config.yaml
+	Instagram InstagramSession `yaml:"instagram"`
 }
 
 type Filter struct {
@@ -64,6 +67,26 @@ type Sources struct {
 	Netflix []Feed `yaml:"netflix"`
 	// myworkdayjobs tenants (nvidia, ...), polled through their cxs api
 	Workday []WorkdaySource `yaml:"workday"`
+	// accounts whose story link stickers we mine ie zero2sudo
+	Instagram []InstagramSource `yaml:"instagram"`
+}
+
+// UserID is instagram's numeric account id, which survives a rename,
+// so the api wants that rather than the handle
+type InstagramSource struct {
+	Name           string `yaml:"name"`
+	UserID         string `yaml:"user_id"`
+	MinIntervalSec int    `yaml:"min_interval_seconds"`
+	// extra random delay, rolled per tick, so the polls don't land on
+	// a perfect grid
+	JitterSec int `yaml:"jitter_seconds"`
+}
+
+// the burner's cookies, lifted from a logged-in browser
+type InstagramSession struct {
+	SessionID string `yaml:"session_id"`
+	DsUserID  string `yaml:"ds_user_id"`
+	CSRFToken string `yaml:"csrf_token"`
 }
 
 // WorkdaySource is one myworkdayjobs tenant. unlike Feed it carries a
@@ -100,6 +123,13 @@ func (p Pushover) HasCreds() bool {
 
 const defaultFeedIntervalSec = 300
 
+// Instagram please do not ban my account :)
+// 5 min plus up to 2.5 more reads like someone refreshing their feed
+const (
+	defaultInstagramIntervalSec = 300
+	defaultInstagramJitterSec   = 150
+)
+
 // Load reads the main config, layers config.local.yaml on top if it
 // exists next to it, then applies env var overrides, then validates.
 func Load(path string) (*Config, error) {
@@ -115,7 +145,8 @@ func Load(path string) (*Config, error) {
 	local := filepath.Join(filepath.Dir(path), "config.local.yaml")
 	if _, err := os.Stat(local); err == nil {
 		var lc struct {
-			Pushover Pushover `yaml:"pushover"`
+			Pushover  Pushover         `yaml:"pushover"`
+			Instagram InstagramSession `yaml:"instagram"`
 		}
 		b, err := os.ReadFile(local)
 		if err != nil {
@@ -132,6 +163,9 @@ func Load(path string) (*Config, error) {
 		if lc.Pushover.UserKey != "" {
 			cfg.Pushover.UserKey = lc.Pushover.UserKey
 		}
+		if lc.Instagram.SessionID != "" {
+			cfg.Instagram = lc.Instagram
+		}
 	}
 
 	// env beats files
@@ -140,6 +174,15 @@ func Load(path string) (*Config, error) {
 	}
 	if v := os.Getenv("CRIER_PUSHOVER_USER_KEY"); v != "" {
 		cfg.Pushover.UserKey = v
+	}
+	if v := os.Getenv("CRIER_IG_SESSION_ID"); v != "" {
+		cfg.Instagram.SessionID = v
+	}
+	if v := os.Getenv("CRIER_IG_DS_USER_ID"); v != "" {
+		cfg.Instagram.DsUserID = v
+	}
+	if v := os.Getenv("CRIER_IG_CSRF_TOKEN"); v != "" {
+		cfg.Instagram.CSRFToken = v
 	}
 
 	cfg.applyDefaults()
@@ -181,13 +224,22 @@ func (c *Config) applyDefaults() {
 			c.Sources.Workday[i].MinIntervalSec = defaultFeedIntervalSec
 		}
 	}
+	for i := range c.Sources.Instagram {
+		if c.Sources.Instagram[i].MinIntervalSec == 0 {
+			c.Sources.Instagram[i].MinIntervalSec = defaultInstagramIntervalSec
+		}
+		if c.Sources.Instagram[i].JitterSec == 0 {
+			c.Sources.Instagram[i].JitterSec = defaultInstagramJitterSec
+		}
+	}
 }
 
 func (c *Config) validate() error {
 	n := len(c.Sources.Greenhouse) + len(c.Sources.Lever) +
 		len(c.Sources.Ashby) + len(c.Sources.GitHub) +
 		len(c.Sources.Google) + len(c.Sources.Apple) +
-		len(c.Sources.Netflix) + len(c.Sources.Workday)
+		len(c.Sources.Netflix) + len(c.Sources.Workday) +
+		len(c.Sources.Instagram)
 	if n == 0 {
 		return errors.New("no sources configured")
 	}
@@ -218,5 +270,24 @@ func (c *Config) validate() error {
 			return fmt.Errorf("workday source needs name, company and url, got name=%q company=%q url=%q", w.Name, w.Company, w.URL)
 		}
 	}
+	for _, ig := range c.Sources.Instagram {
+		if ig.Name == "" || ig.UserID == "" {
+			return fmt.Errorf("instagram source needs name and user_id, got name=%q user_id=%q", ig.Name, ig.UserID)
+		}
+		// a handle pasted here answers 200 with an empty reel, so the
+		// source would look healthy while finding nothing forever
+		if !isDigits(ig.UserID) {
+			return fmt.Errorf("instagram user_id %q must be the numeric account id, not the handle", ig.UserID)
+		}
+	}
 	return nil
+}
+
+func isDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
 }
