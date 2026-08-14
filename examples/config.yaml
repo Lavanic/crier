@@ -399,6 +399,9 @@ sources:
     - name: zero2sudo
       user_id: "50350974961"
       # the one source that bans you for asking too often. jitter is
-      # rolled per tick, a perfect grid is an easy bot tell
-      min_interval_seconds: 300
-      jitter_seconds: 150
+      # rolled per tick, a perfect grid is an easy bot tell, and
+      # active_hours keeps it off the 4am polls no human makes
+      min_interval_seconds: 1200
+      jitter_seconds: 600
+      active_hours: "09-23"
+      timezone: America/New_York

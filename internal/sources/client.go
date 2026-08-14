@@ -107,6 +107,13 @@ func getHTML(ctx context.Context, c *http.Client, url string) (string, error) {
 // header/status/decode handling lives in exactly one place.
 // opts is for sources needing extra headers, instagram wants a cookie
 func getJSON(ctx context.Context, c *http.Client, url string, v any, opts ...func(*http.Request)) error {
+	return getJSONResp(ctx, c, url, v, nil, opts...)
+}
+
+// same, plus a peek at the response headers before the status check.
+// instagram's www-claim rides on those and comes back on errors too
+func getJSONResp(ctx context.Context, c *http.Client, url string, v any,
+	onResp func(http.Header), opts ...func(*http.Request)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -124,6 +131,9 @@ func getJSON(ctx context.Context, c *http.Client, url string, v any, opts ...fun
 	// always close the body or the connection can't be reused
 	defer resp.Body.Close()
 
+	if onResp != nil {
+		onResp(resp.Header)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return &statusError{URL: url, Code: resp.StatusCode, Status: resp.Status}
 	}

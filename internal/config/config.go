@@ -16,6 +16,8 @@ import (
 	"regexp"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/Lavanic/crier/internal/sources"
 )
 
 type Config struct {
@@ -80,6 +82,10 @@ type InstagramSource struct {
 	// extra random delay, rolled per tick, so the polls don't land on
 	// a perfect grid
 	JitterSec int `yaml:"jitter_seconds"`
+	// polling window like "09-23", empty means around the clock.
+	// timezone matters, the droplet runs utc
+	ActiveHours string `yaml:"active_hours"`
+	Timezone    string `yaml:"timezone"`
 }
 
 // the burner's cookies, lifted from a logged-in browser
@@ -124,10 +130,11 @@ func (p Pushover) HasCreds() bool {
 const defaultFeedIntervalSec = 300
 
 // Instagram please do not ban my account :)
-// 5 min plus up to 2.5 more reads like someone refreshing their feed
+// stories live 24h, so ~35 checks a day still sees every link. the old
+// 5 min got the burner challenged in under three hours
 const (
-	defaultInstagramIntervalSec = 300
-	defaultInstagramJitterSec   = 150
+	defaultInstagramIntervalSec = 1200
+	defaultInstagramJitterSec   = 600
 )
 
 // Load reads the main config, layers config.local.yaml on top if it
@@ -278,6 +285,10 @@ func (c *Config) validate() error {
 		// source would look healthy while finding nothing forever
 		if !isDigits(ig.UserID) {
 			return fmt.Errorf("instagram user_id %q must be the numeric account id, not the handle", ig.UserID)
+		}
+		// fail at startup, not silently at 3am with the wrong window
+		if _, err := sources.ParseActiveHours(ig.ActiveHours, ig.Timezone); err != nil {
+			return fmt.Errorf("instagram %s: %w", ig.Name, err)
 		}
 	}
 	return nil

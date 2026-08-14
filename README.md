@@ -50,7 +50,7 @@ server-side-filtered slice every 5 minutes with no headless browser needed.
 full-time off crowdsourced tips and drops the apply link on his Instagram
 story which surfaces companies no slug list reaches. crier reads those link
 stickers off Instagram's own web API (session cookie + app-id header, no
-headless browser) once per 5 minutes with jitter, from a burner account.
+headless browser) once per 25 minutes with jitter, from a burner account.
 
 ## Quick start (local)
 
@@ -136,9 +136,9 @@ real postings flip.
   One dead board never kills a tick.
 - `min_interval_seconds` is a floor whether the fetch succeeded or not, so a
   failing source backs off instead of retrying every 30s.
-- An expired Instagram cookie fails silently: the tick still exits 0 and the
-  dead-man switch stays green. It logs `session cookie rejected`, so grep for
-  that if the story links go quiet.
+- A source with no successful fetch in 6h sends one Pushover, then goes quiet
+  for 24h. The dead-man switch only catches a dead *tick*, and one dead source
+  leaves it green, so this is the only thing that notices an expired cookie.
 - The db is append-only memory: jobs are marked seen *before* filtering, so
   loosening filters later never re-alerts old postings.
 - Pushover free quota is 10k messages/month, pooled per account. A sane

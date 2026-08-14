@@ -53,6 +53,19 @@ var migrations = []string{
 		location   TEXT NOT NULL,
 		fetched_at INTEGER NOT NULL
 	)`,
+	// scratch space for anything that has to outlive a tick. right now
+	// just instagram's www-claim, which the real client echoes back
+	`CREATE TABLE IF NOT EXISTS kv (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL
+	)`,
+	// a source can fail for days while the tick still exits 0 and the
+	// dead-man switch stays green. these two make that noisy
+	`ALTER TABLE source_polls ADD COLUMN last_ok_at INTEGER NOT NULL DEFAULT 0`,
+	`ALTER TABLE source_polls ADD COLUMN last_warned_at INTEGER NOT NULL DEFAULT 0`,
+	// existing rows would otherwise read as "never succeeded" and all
+	// page at once on the next tick
+	`UPDATE source_polls SET last_ok_at = last_polled_at WHERE last_ok_at = 0`,
 }
 
 // long enough that a repost never re-asks, short enough that a
@@ -254,12 +267,84 @@ func (s *Store) LastPolled(source string) (t time.Time, ok bool, err error) {
 	return time.Unix(unix, 0), true, nil
 }
 
-// SetPolled upserts the last-poll timestamp for a source
+// SetPolled upserts the last-poll timestamp for a source. a brand new
+// row starts out "healthy" so a first-ever poll can't page instantly
 func (s *Store) SetPolled(source string, now time.Time) error {
 	_, err := s.db.Exec(
-		`INSERT INTO source_polls (source, last_polled_at) VALUES (?, ?)
+		`INSERT INTO source_polls (source, last_polled_at, last_ok_at) VALUES (?, ?, ?)
 		 ON CONFLICT(source) DO UPDATE SET last_polled_at = excluded.last_polled_at`,
-		source, now.Unix(),
+		source, now.Unix(), now.Unix(),
+	)
+	return err
+}
+
+// SetPolledOK stamps a successful fetch. the gap between this and
+// last_polled_at is how long a source has been quietly broken
+func (s *Store) SetPolledOK(source string, now time.Time) error {
+	_, err := s.db.Exec(
+		`UPDATE source_polls SET last_ok_at = ? WHERE source = ?`, now.Unix(), source,
+	)
+	return err
+}
+
+// StaleSource is a gated source that hasn't fetched anything in a while
+type StaleSource struct {
+	Name string
+	Ok   time.Time // last successful fetch
+}
+
+// StaleSources returns sources with no success in `after` that haven't
+// been warned about in `repeat`, and marks them warned in the same
+// call so the caller can't double-send
+func (s *Store) StaleSources(now time.Time, after, repeat time.Duration) ([]StaleSource, error) {
+	rows, err := s.db.Query(
+		`SELECT source, last_ok_at FROM source_polls
+		 WHERE last_ok_at < ? AND last_warned_at < ?`,
+		now.Add(-after).Unix(), now.Add(-repeat).Unix(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []StaleSource
+	for rows.Next() {
+		var st StaleSource
+		var unix int64
+		if err := rows.Scan(&st.Name, &unix); err != nil {
+			return nil, err
+		}
+		st.Ok = time.Unix(unix, 0)
+		out = append(out, st)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for _, st := range out {
+		if _, err := s.db.Exec(
+			`UPDATE source_polls SET last_warned_at = ? WHERE source = ?`,
+			now.Unix(), st.Name,
+		); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+// GetKV returns "" for a missing key, callers all have a sane default
+func (s *Store) GetKV(key string) (string, error) {
+	var v string
+	err := s.db.QueryRow(`SELECT value FROM kv WHERE key = ?`, key).Scan(&v)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	return v, err
+}
+
+func (s *Store) SetKV(key, value string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO kv (key, value) VALUES (?, ?)
+		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value,
 	)
 	return err
 }

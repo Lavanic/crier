@@ -22,6 +22,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	// bakes the tz database into the binary so active_hours works on a
+	// box with no /usr/share/zoneinfo
+	_ "time/tzdata"
 	"unicode"
 
 	"golang.org/x/sync/errgroup"
@@ -176,6 +179,13 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 			}
 			defer func() { <-sem }() // give it back
 
+			// sources that only run certain hours opt in by implementing
+			// Windowed. checked first, an asleep source shouldn't even
+			// move its poll timestamp
+			if w, ok := src.(sources.Windowed); ok && !w.ActiveAt(now) {
+				return nil
+			}
+
 			// only slow-cadence sources (github feeds) need the poll
 			// table, skipping it for the rest saves ~51 db writes and
 			// fsyncs per tick (matters on sd cards)
@@ -204,6 +214,11 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 				return nil
 			}
 			fetchOK.Add(1)
+			if gated {
+				if err := st.SetPolledOK(src.Name(), now); err != nil {
+					return err
+				}
+			}
 			if len(jobs) == 0 {
 				log.Warn("source returned 0 jobs", "source", src.Name())
 			}
@@ -251,6 +266,10 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 
 	notifyErr := dispatch(log, st, notifier, cfg.DisplayNames,
 		sirenSet(cfg.PriorityCompanies), alerts, dryRun, seedRun)
+
+	if !seedRun {
+		warnStaleSources(log, st, notifier, now)
+	}
 
 	log.Info("tick done",
 		"sources", len(srcs), "alerts", len(alerts), "dry_run", dryRun,
@@ -475,6 +494,48 @@ func displayName(names map[string]string, company string) string {
 	return company
 }
 
+// how long a gated source can go without a single successful fetch
+// before it's worth a ping, and how often to repeat it
+const (
+	staleSourceAfter  = 6 * time.Hour
+	staleSourceRepeat = 24 * time.Hour
+)
+
+// more than this many stale at once is a network outage, not a broken
+// source. one line beats thirteen
+const maxStaleAlerts = 3
+
+// the gap the dead-man switch can't see: a source dies, the tick still
+// exits 0, healthchecks stays green, and nothing says a word. the
+// instagram cookie sat dead for 44h that way
+func warnStaleSources(log *slog.Logger, st *store.Store, n *notify.Notifier, now time.Time) {
+	stale, err := st.StaleSources(now, staleSourceAfter, staleSourceRepeat)
+	if err != nil {
+		log.Error("stale source check failed", "err", err)
+		return
+	}
+	for _, s := range stale {
+		log.Warn("source stale", "source", s.Name, "last_ok", s.Ok.Format(time.RFC3339))
+	}
+	// dry runs still log, they just don't buzz
+	if len(stale) == 0 || n == nil {
+		return
+	}
+	if len(stale) > maxStaleAlerts {
+		msg := fmt.Sprintf("%d sources have not fetched in %s", len(stale), staleSourceAfter)
+		if err := n.Send("crier: sources down", msg, notify.Normal); err != nil {
+			log.Error("stale source alert failed", "err", err)
+		}
+		return
+	}
+	for _, s := range stale {
+		msg := fmt.Sprintf("no successful fetch since %s", s.Ok.Format("Jan 2 15:04"))
+		if err := n.Send("crier: "+s.Name+" down", msg, notify.Normal); err != nil {
+			log.Error("stale source alert failed", "source", s.Name, "err", err)
+		}
+	}
+}
+
 // turns config entries into live Source values. the loop bodies are
 // the ONLY place in main that knows concrete source types.
 // st is just for the instagram title cache
@@ -528,6 +589,10 @@ func buildSources(cfg *config.Config, st *store.Store) []sources.Source {
 				time.Duration(ig.MinIntervalSec)*time.Second,
 				time.Duration(ig.JitterSec)*time.Second)
 			src.SetEnricher(sources.NewEnricher(st))
+			src.SetKV(st)
+			// config already validated this parses
+			hours, _ := sources.ParseActiveHours(ig.ActiveHours, ig.Timezone)
+			src.SetActiveHours(hours)
 			srcs = append(srcs, src)
 		}
 	}

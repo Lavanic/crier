@@ -646,5 +646,10 @@ sources:
   instagram:
     - name: zero2sudo
       user_id: "50350974961"
-      min_interval_seconds: 300
-      jitter_seconds: 150
+      # ~35 checks a day inside his posting hours. stories live 24h so
+      # this misses nothing, it just arrives later, and this is the one
+      # source that gets you challenged for asking too often
+      min_interval_seconds: 1200
+      jitter_seconds: 600
+      active_hours: "09-23"
+      timezone: America/New_York

@@ -330,3 +330,76 @@ func TestPollTimestamps(t *testing.T) {
 		t.Errorf("after upsert LastPolled = %v, want %v", got, second)
 	}
 }
+
+func TestKVRoundTrips(t *testing.T) {
+	s, _ := openTemp(t)
+
+	// a missing key is not an error, callers all have a default
+	v, err := s.GetKV("nope")
+	if err != nil || v != "" {
+		t.Fatalf("GetKV(missing) = %q, %v", v, err)
+	}
+	if err := s.SetKV("claim", "hmac.one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetKV("claim", "hmac.two"); err != nil {
+		t.Fatal(err)
+	}
+	if v, _ := s.GetKV("claim"); v != "hmac.two" {
+		t.Errorf("GetKV = %q, want the overwritten value", v)
+	}
+}
+
+// the 44h silent death: a source stops working, the tick still exits 0
+// and nothing says a word
+func TestStaleSourcesFindsAndThrottles(t *testing.T) {
+	s, _ := openTemp(t)
+	now := time.Now()
+
+	// a first poll counts as healthy, otherwise every new source pages
+	// on the tick that introduces it
+	if err := s.SetPolled("instagram:zero2sudo", now); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := s.StaleSources(now, 6*time.Hour, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 0 {
+		t.Fatalf("a brand new source read as stale: %+v", stale)
+	}
+
+	// keep attempting for 7h without ever succeeding
+	later := now.Add(7 * time.Hour)
+	if err := s.SetPolled("instagram:zero2sudo", later); err != nil {
+		t.Fatal(err)
+	}
+	stale, err = s.StaleSources(later, 6*time.Hour, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 1 || stale[0].Name != "instagram:zero2sudo" {
+		t.Fatalf("got %+v, want the one stale source", stale)
+	}
+
+	// warned once, so it must stay quiet on the very next tick
+	stale, err = s.StaleSources(later.Add(30*time.Second), 6*time.Hour, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 0 {
+		t.Errorf("warned twice in a row: %+v", stale)
+	}
+
+	// one success clears it, the cookie came back
+	if err := s.SetPolledOK("instagram:zero2sudo", later); err != nil {
+		t.Fatal(err)
+	}
+	stale, err = s.StaleSources(later.Add(time.Hour), 6*time.Hour, 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 0 {
+		t.Errorf("still stale after a success: %+v", stale)
+	}
+}

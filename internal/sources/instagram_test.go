@@ -168,6 +168,9 @@ func TestInstagramFetchExplainsAuthFailure(t *testing.T) {
 		{"expired session", http.StatusUnauthorized, "session cookie rejected"},
 		{"checkpointed", http.StatusForbidden, "session cookie rejected"},
 		{"throttled", http.StatusTooManyRequests, "rate limited"},
+		// the automated-behavior challenge. it read as "unexpected
+		// status 400" for 44h and nobody could tell what to do about it
+		{"challenged", http.StatusBadRequest, "clear the warning"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -221,6 +224,117 @@ func TestInstagramFetchEmptyReelIsNotAnError(t *testing.T) {
 	}
 	if len(jobs) != 0 {
 		t.Errorf("got %d jobs from an empty reel", len(jobs))
+	}
+}
+
+// the headers are the whole reason the burner got challenged, so they
+// get asserted rather than eyeballed
+func TestInstagramSendsBrowserHeaders(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Write([]byte(`{"reels_media":[]}`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestStories(t, srv).Fetch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	// no browser sends this, so sending it only ever marked us a script
+	if v := got.Get("X-Requested-With"); v != "" {
+		t.Errorf("X-Requested-With = %q, want it gone", v)
+	}
+	want := map[string]string{
+		"X-Ig-App-Id":      instagramAppID,
+		"X-Asbd-Id":        instagramASBDID,
+		"Sec-Fetch-Site":   "same-origin",
+		"Sec-Fetch-Mode":   "cors",
+		"Sec-Ch-Ua-Mobile": "?0",
+	}
+	for k, v := range want {
+		if got.Get(k) != v {
+			t.Errorf("%s = %q, want %q", k, got.Get(k), v)
+		}
+	}
+	for _, k := range []string{"Sec-Ch-Ua", "Accept-Language", "User-Agent"} {
+		if got.Get(k) == "" {
+			t.Errorf("%s missing", k)
+		}
+	}
+}
+
+// fakeKV stands in for the store, which is the only thing that
+// survives a tick
+type fakeKV map[string]string
+
+func (f fakeKV) GetKV(key string) (string, error) { return f[key], nil }
+func (f fakeKV) SetKV(key, value string) error    { f[key] = value; return nil }
+
+// instagram sets a claim and expects it back next call. the process
+// exits every 30s, so it has to round-trip through the db
+func TestInstagramEchoesTheWWWClaim(t *testing.T) {
+	var sent []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sent = append(sent, r.Header.Get("X-IG-WWW-Claim"))
+		w.Header().Set("X-IG-Set-WWW-Claim", "hmac.AR3xyz")
+		w.Write([]byte(`{"reels_media":[]}`))
+	}))
+	defer srv.Close()
+
+	kv := fakeKV{}
+	for range 2 {
+		// a fresh source each time, same as a fresh process each tick
+		s := newTestStories(t, srv)
+		s.SetKV(kv)
+		if _, err := s.Fetch(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if len(sent) != 2 || sent[0] != "0" || sent[1] != "hmac.AR3xyz" {
+		t.Errorf("claims sent = %q, want [0 hmac.AR3xyz]", sent)
+	}
+}
+
+// no store wired up must not break the fetch, tests pass nil
+func TestInstagramWithoutKVStillSendsAClaim(t *testing.T) {
+	var claim string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claim = r.Header.Get("X-IG-WWW-Claim")
+		w.Header().Set("X-IG-Set-WWW-Claim", "hmac.dropped")
+		w.Write([]byte(`{"reels_media":[]}`))
+	}))
+	defer srv.Close()
+
+	if _, err := newTestStories(t, srv).Fetch(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if claim != "0" {
+		t.Errorf("claim = %q, want 0", claim)
+	}
+}
+
+func TestInstagramActiveHoursGateTheSource(t *testing.T) {
+	s := NewInstagramStories(NewInstagramClient(), "zero2sudo", "1",
+		testSession(), time.Minute, 0)
+	hours, err := ParseActiveHours("09-23", "America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveHours(hours)
+
+	// 08:00 utc is 4am in new york
+	if s.ActiveAt(time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)) {
+		t.Error("polled at 4am")
+	}
+	if !s.ActiveAt(time.Date(2026, 8, 14, 18, 0, 0, 0, time.UTC)) {
+		t.Error("skipped a 2pm poll")
+	}
+	// unset window is always on, that's what every other source gets
+	if !NewInstagramStories(NewInstagramClient(), "z", "1", testSession(), time.Minute, 0).
+		ActiveAt(time.Date(2026, 8, 14, 8, 0, 0, 0, time.UTC)) {
+		t.Error("no window configured should never gate")
 	}
 }
 
