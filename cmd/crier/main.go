@@ -22,9 +22,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	// bakes the tz database into the binary so active_hours works on a
-	// box with no /usr/share/zoneinfo
-	_ "time/tzdata"
 	"unicode"
 
 	"golang.org/x/sync/errgroup"
@@ -157,7 +154,7 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 		}
 	}
 
-	srcs := buildSources(cfg, st)
+	srcs := buildSources(cfg)
 
 	ctx, cancel := context.WithTimeout(context.Background(), tickTimeout)
 	defer cancel()
@@ -179,13 +176,6 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 			}
 			defer func() { <-sem }() // give it back
 
-			// sources that only run certain hours opt in by implementing
-			// Windowed. checked first, an asleep source shouldn't even
-			// move its poll timestamp
-			if w, ok := src.(sources.Windowed); ok && !w.ActiveAt(now) {
-				return nil
-			}
-
 			// only slow-cadence sources (github feeds) need the poll
 			// table, skipping it for the rest saves ~51 db writes and
 			// fsyncs per tick (matters on sd cards)
@@ -199,9 +189,9 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 					return nil
 				}
 				// stamp the ATTEMPT, not the success. a failed source
-				// used to retry next tick, which for instagram means
-				// hammering it every 30s right when something is already
-				// wrong. the interval has to be a floor either way
+				// used to retry next tick, hammering it every 30s right
+				// when something is already wrong. the interval has to
+				// be a floor either way
 				if err := st.SetPolled(src.Name(), now); err != nil {
 					return err
 				}
@@ -268,7 +258,7 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 		sirenSet(cfg.PriorityCompanies), alerts, dryRun, seedRun)
 
 	if !seedRun {
-		warnStaleSources(log, st, notifier, now)
+		warnStaleSources(log, st, notifier, now, sourceNames(srcs))
 	}
 
 	log.Info("tick done",
@@ -506,10 +496,18 @@ const (
 const maxStaleAlerts = 3
 
 // the gap the dead-man switch can't see: a source dies, the tick still
-// exits 0, healthchecks stays green, and nothing says a word. the
-// instagram cookie sat dead for 44h that way
-func warnStaleSources(log *slog.Logger, st *store.Store, n *notify.Notifier, now time.Time) {
-	stale, err := st.StaleSources(now, staleSourceAfter, staleSourceRepeat)
+// exits 0, healthchecks stays green, and nothing says a word. one
+// source sat dead for 44h that way
+func sourceNames(srcs []sources.Source) []string {
+	out := make([]string, len(srcs))
+	for i, src := range srcs {
+		out[i] = src.Name()
+	}
+	return out
+}
+
+func warnStaleSources(log *slog.Logger, st *store.Store, n *notify.Notifier, now time.Time, live []string) {
+	stale, err := st.StaleSources(now, staleSourceAfter, staleSourceRepeat, live)
 	if err != nil {
 		log.Error("stale source check failed", "err", err)
 		return
@@ -537,9 +535,8 @@ func warnStaleSources(log *slog.Logger, st *store.Store, n *notify.Notifier, now
 }
 
 // turns config entries into live Source values. the loop bodies are
-// the ONLY place in main that knows concrete source types.
-// st is just for the instagram title cache
-func buildSources(cfg *config.Config, st *store.Store) []sources.Source {
+// the ONLY place in main that knows concrete source types
+func buildSources(cfg *config.Config) []sources.Source {
 	client := sources.NewHTTPClient()
 	var srcs []sources.Source
 	for _, slug := range cfg.Sources.Greenhouse {
@@ -575,26 +572,6 @@ func buildSources(cfg *config.Config, st *store.Store) []sources.Source {
 		srcs = append(srcs, sources.NewWorkday(
 			client, w.Name, w.Company, w.URL, w.Search,
 			time.Duration(w.MinIntervalSec)*time.Second))
-	}
-	if len(cfg.Sources.Instagram) > 0 {
-		// its own client, the shared one retries 429s
-		igClient := sources.NewInstagramClient()
-		session := sources.Session{
-			SessionID: cfg.Instagram.SessionID,
-			DsUserID:  cfg.Instagram.DsUserID,
-			CSRFToken: cfg.Instagram.CSRFToken,
-		}
-		for _, ig := range cfg.Sources.Instagram {
-			src := sources.NewInstagramStories(igClient, ig.Name, ig.UserID, session,
-				time.Duration(ig.MinIntervalSec)*time.Second,
-				time.Duration(ig.JitterSec)*time.Second)
-			src.SetEnricher(sources.NewEnricher(st))
-			src.SetKV(st)
-			// config already validated this parses
-			hours, _ := sources.ParseActiveHours(ig.ActiveHours, ig.Timezone)
-			src.SetActiveHours(hours)
-			srcs = append(srcs, src)
-		}
 	}
 	return srcs
 }

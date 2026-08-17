@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License: MIT">
 </p>
 
-A single-binary Go bot that watches 130 sources (123 Greenhouse/Lever/Ashby
+A single-binary Go bot that watches 135 sources (128 Greenhouse/Lever/Ashby
 company boards, 2 aggregator feeds, plus the Google, Apple, Netflix and NVIDIA
 careers sites directly) and fires an iOS Critical Alert on my phone within about a minute of a new-grad SWE role going live. Built for the December 2026 / June 2027 new-grad cycle, where some places routinely close postings within hours (sometimes with hard caps on application count). Being in the first 50 applicants is kinda the goal. No dashboard / web UI. Postings from a hand-picked list of priority companies page me like an on-call, punching through DnD; everything else arrives as a normal ping. Tapping either opens the apply page. The project as a whole was meant to see how much I could minimize the latency :)
 
@@ -18,7 +18,6 @@ systemd timer (every 30s on a $4 vps)
   └─ crier (one tick, then exit)
        ├─ fan out: greenhouse / lever / ashby boards + aggregator feeds
        │           + google / apple / netflix / nvidia careers pages
-       │           + link stickers off @zero2sudo's instagram story
        ├─ filter:  include regexes + exclude keywords/patterns,
        │           us-only location gate, feed category gate
        ├─ dedup:   sqlite INSERT OR IGNORE on {source}:{company}:{job_id},
@@ -46,12 +45,6 @@ Google, Apple, Netflix and NVIDIA run their own career sites with no public
 board API, so crier scrapes each directly, polling a date-sorted,
 server-side-filtered slice every 5 minutes with no headless browser needed.
 
-[@zero2sudo](https://instagram.com/zero2sudo) does openings discovery
-full-time off crowdsourced tips and drops the apply link on his Instagram
-story which surfaces companies no slug list reaches. crier reads those link
-stickers off Instagram's own web API (session cookie + app-id header, no
-headless browser) once per 25 minutes with jitter, from a burner account.
-
 ## Quick start (local)
 
 Needs Go 1.26+.
@@ -62,10 +55,6 @@ cat > config.local.yaml <<EOF         # gitignored creds
 pushover:
   app_token: your-app-token
   user_key: your-user-key
-instagram:                            # optional, for the story dragnet
-  session_id: from-a-burner-accounts-cookies
-  ds_user_id: same-place
-  csrf_token: same-place
 EOF
 
 make dry-run   # seeds the db, logs would-notify jobs, sends nothing
@@ -138,7 +127,7 @@ real postings flip.
   failing source backs off instead of retrying every 30s.
 - A source with no successful fetch in 6h sends one Pushover, then goes quiet
   for 24h. The dead-man switch only catches a dead *tick*, and one dead source
-  leaves it green, so this is the only thing that notices an expired cookie.
+  leaves it green, so this is the only thing that notices a board going away.
 - The db is append-only memory: jobs are marked seen *before* filtering, so
   loosening filters later never re-alerts old postings.
 - Pushover free quota is 10k messages/month, pooled per account. A sane

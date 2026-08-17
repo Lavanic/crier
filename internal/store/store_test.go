@@ -236,72 +236,6 @@ func TestMigratesLegacySchema(t *testing.T) {
 	}
 }
 
-func TestTitleCache(t *testing.T) {
-	s, _ := openTemp(t)
-	const link = "https://job-boards.greenhouse.io/ctc/jobs/4716937005"
-
-	if _, _, ok, err := s.LookupTitle(link); err != nil || ok {
-		t.Fatalf("empty cache returned ok=%v err=%v", ok, err)
-	}
-	if err := s.SaveTitle(link, "Associate Engineer", "Chicago, IL"); err != nil {
-		t.Fatal(err)
-	}
-	title, loc, ok, err := s.LookupTitle(link)
-	if err != nil || !ok {
-		t.Fatalf("lookup after save: ok=%v err=%v", ok, err)
-	}
-	if title != "Associate Engineer" || loc != "Chicago, IL" {
-		t.Errorf("got %q / %q", title, loc)
-	}
-
-	// a 404 caches an empty title so we stop asking. "found a row" and
-	// "title is empty" are different answers
-	const gone = "https://job-boards.greenhouse.io/ctc/jobs/999"
-	if err := s.SaveTitle(gone, "", ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, ok, _ := s.LookupTitle(gone); !ok {
-		t.Error("a cached empty title should still count as a hit")
-	}
-
-	// re-saving refreshes rather than colliding on the primary key
-	if err := s.SaveTitle(link, "Associate Engineer II", "NYC"); err != nil {
-		t.Fatal(err)
-	}
-	if title, _, _, _ := s.LookupTitle(link); title != "Associate Engineer II" {
-		t.Errorf("title after re-save = %q", title)
-	}
-}
-
-func TestTitleCacheExpires(t *testing.T) {
-	s, path := openTemp(t)
-	const link = "https://job-boards.greenhouse.io/ctc/jobs/1"
-	if err := s.SaveTitle(link, "Associate Engineer", "Chicago, IL"); err != nil {
-		t.Fatal(err)
-	}
-	s.Close()
-
-	// backdate the row past the ttl instead of sleeping a week
-	db, err := sql.Open("sqlite", "file:"+path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stale := time.Now().Add(-titleCacheTTL - time.Hour).Unix()
-	if _, err := db.Exec(`UPDATE link_titles SET fetched_at = ?`, stale); err != nil {
-		t.Fatal(err)
-	}
-	db.Close()
-
-	s2, err := Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer s2.Close()
-	if _, _, ok, _ := s2.LookupTitle(link); ok {
-		t.Error("a stale row should miss so the board gets asked again")
-	}
-}
-
 func TestPollTimestamps(t *testing.T) {
 	s, _ := openTemp(t)
 
@@ -331,37 +265,16 @@ func TestPollTimestamps(t *testing.T) {
 	}
 }
 
-func TestKVRoundTrips(t *testing.T) {
-	s, _ := openTemp(t)
-
-	// a missing key is not an error, callers all have a default
-	v, err := s.GetKV("nope")
-	if err != nil || v != "" {
-		t.Fatalf("GetKV(missing) = %q, %v", v, err)
-	}
-	if err := s.SetKV("claim", "hmac.one"); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetKV("claim", "hmac.two"); err != nil {
-		t.Fatal(err)
-	}
-	if v, _ := s.GetKV("claim"); v != "hmac.two" {
-		t.Errorf("GetKV = %q, want the overwritten value", v)
-	}
-}
-
-// the 44h silent death: a source stops working, the tick still exits 0
-// and nothing says a word
 func TestStaleSourcesFindsAndThrottles(t *testing.T) {
 	s, _ := openTemp(t)
 	now := time.Now()
 
 	// a first poll counts as healthy, otherwise every new source pages
 	// on the tick that introduces it
-	if err := s.SetPolled("instagram:zero2sudo", now); err != nil {
+	if err := s.SetPolled("github:simplifyjobs", now); err != nil {
 		t.Fatal(err)
 	}
-	stale, err := s.StaleSources(now, 6*time.Hour, 24*time.Hour)
+	stale, err := s.StaleSources(now, 6*time.Hour, 24*time.Hour, []string{"github:simplifyjobs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,19 +284,19 @@ func TestStaleSourcesFindsAndThrottles(t *testing.T) {
 
 	// keep attempting for 7h without ever succeeding
 	later := now.Add(7 * time.Hour)
-	if err := s.SetPolled("instagram:zero2sudo", later); err != nil {
+	if err := s.SetPolled("github:simplifyjobs", later); err != nil {
 		t.Fatal(err)
 	}
-	stale, err = s.StaleSources(later, 6*time.Hour, 24*time.Hour)
+	stale, err = s.StaleSources(later, 6*time.Hour, 24*time.Hour, []string{"github:simplifyjobs"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(stale) != 1 || stale[0].Name != "instagram:zero2sudo" {
+	if len(stale) != 1 || stale[0].Name != "github:simplifyjobs" {
 		t.Fatalf("got %+v, want the one stale source", stale)
 	}
 
 	// warned once, so it must stay quiet on the very next tick
-	stale, err = s.StaleSources(later.Add(30*time.Second), 6*time.Hour, 24*time.Hour)
+	stale, err = s.StaleSources(later.Add(30*time.Second), 6*time.Hour, 24*time.Hour, []string{"github:simplifyjobs"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -392,14 +305,43 @@ func TestStaleSourcesFindsAndThrottles(t *testing.T) {
 	}
 
 	// one success clears it, the cookie came back
-	if err := s.SetPolledOK("instagram:zero2sudo", later); err != nil {
+	if err := s.SetPolledOK("github:simplifyjobs", later); err != nil {
 		t.Fatal(err)
 	}
-	stale, err = s.StaleSources(later.Add(time.Hour), 6*time.Hour, 24*time.Hour)
+	stale, err = s.StaleSources(later.Add(time.Hour), 6*time.Hour, 24*time.Hour, []string{"github:simplifyjobs"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(stale) != 0 {
 		t.Errorf("still stale after a success: %+v", stale)
+	}
+}
+
+// a source deleted from the config leaves its poll row behind. nothing
+// ever polls it again, so without the live filter it pages every day
+func TestStaleSourcesIgnoresRemovedSources(t *testing.T) {
+	s, _ := openTemp(t)
+	now := time.Now()
+
+	if err := s.SetPolled("greenhouse:gone", now); err != nil {
+		t.Fatal(err)
+	}
+	later := now.Add(7 * time.Hour)
+
+	stale, err := s.StaleSources(later, 6*time.Hour, 24*time.Hour, []string{"greenhouse:still-here"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 0 {
+		t.Fatalf("paged about a source that is no longer configured: %+v", stale)
+	}
+
+	// still reported while it IS configured
+	stale, err = s.StaleSources(later, 6*time.Hour, 24*time.Hour, []string{"greenhouse:gone"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(stale) != 1 {
+		t.Errorf("got %+v, want the configured-but-down source", stale)
 	}
 }

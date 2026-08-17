@@ -96,14 +96,7 @@ func body(j sources.Job) string {
 	if loc == "" {
 		loc = "no location listed"
 	}
-	return loc + " · " + sourceLabel(j.Source)
-}
-
-func sourceLabel(source string) string {
-	if handle, ok := strings.CutPrefix(source, "instagram:"); ok {
-		return "via @" + handle
-	}
-	return source
+	return loc + " · " + j.Source
 }
 
 // truncate by runes, not bytes. slicing bytes can cut a multibyte

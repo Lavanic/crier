@@ -8,6 +8,7 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	// blank import: we never call this package directly, importing it
@@ -45,16 +46,16 @@ var migrations = []string{
 	// so backlog retries re-filter with the same category the fresh
 	// fetch had, old rows default to ''
 	`ALTER TABLE jobs ADD COLUMN category TEXT NOT NULL DEFAULT ''`,
-	// board titles for story links that arrived without one, so we
-	// don't ask greenhouse the same question 288 times a day
+	// retired. a link-title cache for a source that no longer exists.
+	// migrations are append-only, so it stays as a no-op on old dbs
 	`CREATE TABLE IF NOT EXISTS link_titles (
 		url        TEXT PRIMARY KEY,
 		title      TEXT NOT NULL,
 		location   TEXT NOT NULL,
 		fetched_at INTEGER NOT NULL
 	)`,
-	// scratch space for anything that has to outlive a tick. right now
-	// just instagram's www-claim, which the real client echoes back
+	// retired alongside link_titles. scratch space for values that had
+	// to outlive a tick, kept so existing dbs still migrate cleanly
 	`CREATE TABLE IF NOT EXISTS kv (
 		key   TEXT PRIMARY KEY,
 		value TEXT NOT NULL
@@ -67,10 +68,6 @@ var migrations = []string{
 	// page at once on the next tick
 	`UPDATE source_polls SET last_ok_at = last_polled_at WHERE last_ok_at = 0`,
 }
-
-// long enough that a repost never re-asks, short enough that a
-// retitled posting eventually corrects itself
-const titleCacheTTL = 7 * 24 * time.Hour
 
 type Store struct {
 	db *sql.DB
@@ -185,39 +182,6 @@ func (s *Store) UnnotifiedSince(since time.Time) ([]PendingAlert, error) {
 	return out, rows.Err()
 }
 
-// a live row counts even with an empty title, that's a posting the
-// board 404'd on and asking again won't change it
-func (s *Store) LookupTitle(url string) (title, location string, ok bool, err error) {
-	var fetchedAt int64
-	err = s.db.QueryRow(
-		`SELECT title, location, fetched_at FROM link_titles WHERE url = ?`, url,
-	).Scan(&title, &location, &fetchedAt)
-	if err == sql.ErrNoRows {
-		return "", "", false, nil
-	}
-	if err != nil {
-		return "", "", false, err
-	}
-	if time.Since(time.Unix(fetchedAt, 0)) > titleCacheTTL {
-		return "", "", false, nil
-	}
-	return title, location, true, nil
-}
-
-// upsert, not insert-or-ignore, so a stale row refreshes instead of
-// pinning the old title forever
-func (s *Store) SaveTitle(url, title, location string) error {
-	_, err := s.db.Exec(
-		`INSERT INTO link_titles (url, title, location, fetched_at) VALUES (?, ?, ?, ?)
-		 ON CONFLICT(url) DO UPDATE SET
-		   title = excluded.title,
-		   location = excluded.location,
-		   fetched_at = excluded.fetched_at`,
-		url, title, location, time.Now().Unix(),
-	)
-	return err
-}
-
 // SeenRef is just enough of a recorded job for main's cross-post
 // dedup. Key lets main skip an alert's own row in the lookup
 type SeenRef struct {
@@ -295,12 +259,24 @@ type StaleSource struct {
 
 // StaleSources returns sources with no success in `after` that haven't
 // been warned about in `repeat`, and marks them warned in the same
-// call so the caller can't double-send
-func (s *Store) StaleSources(now time.Time, after, repeat time.Duration) ([]StaleSource, error) {
+// call so the caller can't double-send. live is the currently
+// configured source names: a row for a source that was deleted from
+// the config would otherwise page forever, nothing ever polls it again
+func (s *Store) StaleSources(now time.Time, after, repeat time.Duration, live []string) ([]StaleSource, error) {
+	if len(live) == 0 {
+		return nil, nil
+	}
+	// has to be in the query, not a filter on the results. this marks
+	// rows warned as it reads them
+	args := []any{now.Add(-after).Unix(), now.Add(-repeat).Unix()}
+	for _, name := range live {
+		args = append(args, name)
+	}
 	rows, err := s.db.Query(
 		`SELECT source, last_ok_at FROM source_polls
-		 WHERE last_ok_at < ? AND last_warned_at < ?`,
-		now.Add(-after).Unix(), now.Add(-repeat).Unix(),
+		 WHERE last_ok_at < ? AND last_warned_at < ?
+		   AND source IN (?`+strings.Repeat(`,?`, len(live)-1)+`)`,
+		args...,
 	)
 	if err != nil {
 		return nil, err
@@ -329,22 +305,4 @@ func (s *Store) StaleSources(now time.Time, after, repeat time.Duration) ([]Stal
 		}
 	}
 	return out, nil
-}
-
-// GetKV returns "" for a missing key, callers all have a sane default
-func (s *Store) GetKV(key string) (string, error) {
-	var v string
-	err := s.db.QueryRow(`SELECT value FROM kv WHERE key = ?`, key).Scan(&v)
-	if err == sql.ErrNoRows {
-		return "", nil
-	}
-	return v, err
-}
-
-func (s *Store) SetKV(key, value string) error {
-	_, err := s.db.Exec(
-		`INSERT INTO kv (key, value) VALUES (?, ?)
-		 ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value,
-	)
-	return err
 }

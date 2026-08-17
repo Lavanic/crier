@@ -186,11 +186,10 @@ func TestSendDigest(t *testing.T) {
 	}
 }
 
-func TestBodyNamesTheStorySource(t *testing.T) {
+func TestBodyNamesTheSource(t *testing.T) {
 	tests := []struct{ source, want string }{
-		{"instagram:zero2sudo", "New York · via @zero2sudo"},
-		// board sources keep their raw name, that's how I tell a 60s
-		// direct hit from a slower aggregator find
+		// sources keep their raw name, that's how I tell a 60s direct
+		// hit from a slower aggregator find
 		{"greenhouse:stripe", "New York · greenhouse:stripe"},
 		{"github:simplifyjobs", "New York · github:simplifyjobs"},
 	}

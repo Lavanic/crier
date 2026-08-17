@@ -33,35 +33,8 @@ func NewHTTPClient() *http.Client {
 	return rc.StandardClient()
 }
 
-// same client, no retries. boards don't mind being asked twice,
-// instagram reads a retry storm as exactly what it is
-func NewInstagramClient() *http.Client {
-	rc := retryablehttp.NewClient()
-	rc.RetryMax = 0
-	rc.HTTPClient.Timeout = 15 * time.Second
-	rc.Logger = nil
-	// 429 is retryable to this library, so with retries off it drops
-	// the response and returns "giving up after 1 attempt". passthrough
-	// keeps it, the only way to tell a throttle from a dead cookie
-	rc.ErrorHandler = retryablehttp.PassthroughErrorHandler
-	return rc.StandardClient()
-}
-
-// for story-link title lookups. they're a nice-to-have inside a 25s
-// tick, so the shared client's ~7s of backoff on a 5xx is the wrong
-// trade. one quick retry, then let the next poll handle it
-func NewEnrichClient() *http.Client {
-	rc := retryablehttp.NewClient()
-	rc.RetryMax = 1
-	rc.RetryWaitMin = 500 * time.Millisecond
-	rc.RetryWaitMax = 2 * time.Second
-	rc.HTTPClient.Timeout = 10 * time.Second
-	rc.Logger = nil
-	return rc.StandardClient()
-}
-
 // carries the code so a caller can tell a dead credential from a
-// blip. a 401 from instagram needs a human, not a retry
+// blip, rather than string-matching the status text
 type statusError struct {
 	URL    string
 	Code   int
@@ -105,15 +78,8 @@ func getHTML(ctx context.Context, c *http.Client, url string) (string, error) {
 // getJSON does a GET with browser headers and decodes the response
 // body into v. all four source clients funnel through here so the
 // header/status/decode handling lives in exactly one place.
-// opts is for sources needing extra headers, instagram wants a cookie
+// opts is for sources that need an extra header or two
 func getJSON(ctx context.Context, c *http.Client, url string, v any, opts ...func(*http.Request)) error {
-	return getJSONResp(ctx, c, url, v, nil, opts...)
-}
-
-// same, plus a peek at the response headers before the status check.
-// instagram's www-claim rides on those and comes back on errors too
-func getJSONResp(ctx context.Context, c *http.Client, url string, v any,
-	onResp func(http.Header), opts ...func(*http.Request)) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
@@ -131,9 +97,6 @@ func getJSONResp(ctx context.Context, c *http.Client, url string, v any,
 	// always close the body or the connection can't be reused
 	defer resp.Body.Close()
 
-	if onResp != nil {
-		onResp(resp.Header)
-	}
 	if resp.StatusCode != http.StatusOK {
 		return &statusError{URL: url, Code: resp.StatusCode, Status: resp.Status}
 	}
