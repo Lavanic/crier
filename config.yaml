@@ -16,6 +16,11 @@ filter:
   # syntax). this set was audited against 11,906 real titles from the
   # seeded db, gains 243 real new-grad titles over the old set with 0 lost
   include:
+    # bare "Software Engineer", no level word. excludes do the work
+    - '(?i)\bsoftware\s+(engineer|developer)\b'
+    - '(?i)\b(swe|sde)\b'
+    # what openai and anthropic call a normal swe role
+    - '(?i)member\s+of\s+technical\s+staff'
     # role keyword + entry-level qualifier. the separator class allows
     # commas, en/em dashes and slashes, real titles use all of them
     # ("Software Engineer – Early Career" was invisible before)
@@ -67,16 +72,18 @@ filter:
     - '(?i)\bengineer\b[\s,:()\-–—/]*(level\s*)?(i|1)\b'
   # ...and gets dropped if it contains any of these whole words.
   # this list is what keeps recall-first from becoming spam.
-  # "staff" and "lead" are deliberately NOT here: they killed real
-  # postings ("Member of Technical Staff New Grad" at AI labs, a
-  # TikTok new-grad role on the Lead Ads team) and removing them
-  # admitted zero senior noise across the whole audited corpus
+  # "staff" and "lead" are deliberately NOT here as keywords: they
+  # killed real postings ("Member of Technical Staff New Grad", a
+  # TikTok role on the Lead Ads team). the rank form is an
+  # exclude_pattern instead, needed since bare "Software Engineer"
+  # started matching
   exclude_keywords:
     - intern
     - internship
     - co-op
     - coop
     - senior
+    - distinguished
     - principal
     - manager
     - director
@@ -188,6 +195,12 @@ filter:
   # raw regexes checked against the title AND the url, workday slugs
   # leak start dates the title hides (vanguard's "2026-Start-Date")
   exclude_patterns:
+    # level 3 and up. I, 1, II and 2 stay, google uses "II" for
+    # its early-career programs
+    - '(?i)\b(engineer|developer|swe|sde)[\s\-]*(iii+|iv)\b'
+    - '(?i)\b(engineer|developer)\s+(level\s*)?[3-9]\b'
+    # the rank only, not "Member of Technical Staff" or "Lead Ads"
+    - '(?i)\b(staff|lead)\+?\s+([\w-]+\s+){0,3}(engineer|developer|scientist)\b'
     - '(?i)\b202[0-6][\s_-]*start\b'
     # I graduate dec 2026 and start in 2027, so 2026-and-earlier cohort
     # tags are all wrong-year junk. workday urls keep the year even when
@@ -226,6 +239,11 @@ filter:
     - bangalore
     - bengaluru
     - hyderabad
+    - gurugram
+    - gurgaon
+    - noida
+    - pune
+    - chennai
     - europe
     - emea
     - apac
