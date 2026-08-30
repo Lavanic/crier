@@ -49,9 +49,12 @@ server-side-filtered slice every 5 minutes with no headless browser needed.
 
 Needs Go 1.26+.
 
+`config.yaml` ships in the repo already filled in, but it is tuned to my own
+search (see [Config](#config)). Point it at the companies you care about
+first, then drop in your credentials:
+
 ```sh
-cp examples/config.yaml config.yaml   # slug list + filters, edit away
-cat > config.local.yaml <<EOF         # gitignored creds
+cat > config.local.yaml <<EOF   # gitignored creds
 pushover:
   app_token: your-app-token
   user_key: your-user-key
@@ -89,8 +92,17 @@ Priority → enable Critical Alerts.
 ## Config
 
 Everything lives in `config.yaml` (committed) except credentials
-(`config.local.yaml` or `CRIER_PUSHOVER_*` env vars). Adding a company is one
-line, no rebuild:
+(`config.local.yaml` or `CRIER_PUSHOVER_*` env vars).
+
+**The committed `config.yaml` is my live one, tuned to my situation: a
+December 2026 / May 2027 graduation, authorized to work in the US, and the
+companies I personally want.** So the year rules treat anything tagged 2026
+or earlier as the wrong cohort, `priority_companies` is my own siren list,
+and `exclude_locations` reflects where I can actually take a job. Fork it and
+cut what does not apply to you. It is a far better starting point than an
+empty file, since every slug in it was verified live against a real board.
+
+Adding a company is one line, no rebuild:
 
 ```yaml
 sources:
@@ -103,9 +115,9 @@ sources:
 ```
 
 Find a company's slug by checking which of those three URLs answers with
-jobs. Every slug shipped in `examples/config.yaml` was verified live; the
-comments record the traps (DoorDash is `doordashusa`, Lever's `Coda` is
-case-sensitive, plain `runway` is a different company, and so on).
+jobs. Every slug in `config.yaml` was verified live; the comments record the
+traps (DoorDash is `doordashusa`, Lever's `Coda` is case-sensitive, plain
+`runway` is a different company, and so on).
 
 The include regexes are tuned recall-first (wide net), and the exclude
 layers do the precision work: `exclude_keywords` (senior, intern, field

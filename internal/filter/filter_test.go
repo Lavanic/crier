@@ -6,7 +6,7 @@ import (
 	"github.com/Lavanic/crier/internal/sources"
 )
 
-// same patterns as examples/config.yaml, kept in sync by hand.
+// same patterns as config.yaml, kept in sync by hand.
 // filter package itself doesn't care what the patterns are
 var include = []string{
 	`(?i)(software\s+engineer|software\s+development\s+engineer|swe|sde|sw\s*eng|developer|programmer)[\s,:()\-–—/]*(i\b|1\b|new\s*grad(uate)?|early\s+career|entry\s+level|associate|university|college|campus|graduate|junior)`,
