@@ -45,13 +45,21 @@ deploy:
 	scp systemd/crier.service systemd/crier.timer $(DEPLOY_HOST):/etc/systemd/system/
 	ssh $(DEPLOY_HOST) 'mv /usr/local/bin/$(BINARY).new /usr/local/bin/$(BINARY) && chown -R crier:crier /opt/crier && chmod 600 /opt/crier/config.local.yaml && systemctl daemon-reload && systemctl enable --now crier.timer'
 
-# pulls the last N alerted jobs off the server with their apply links on
-# their own line, so the terminal makes them clickable. needs local
-# sqlite3, override the count with N=30
+# pulls the last N alerted jobs off the server. the title is an OSC 8
+# terminal hyperlink (ctrl+click to open), so the raw url never gets
+# printed. workday urls run 150+ chars and used to wrap across rows,
+# which broke both clicking and copy/paste. needs local sqlite3.
+# override the count with N=30, or RAW=1 to print bare urls instead
 links:
 	@test -n "$(DEPLOY_HOST)" || (echo "set DEPLOY_HOST=user@host" && exit 1)
 	@tmp=$$(mktemp) && scp -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
-	sqlite3 $$tmp "select datetime(notified_at,'unixepoch','localtime') || '  ' || company || ' - ' || title || char(10) || '    ' || url || char(10) from jobs where notified_at is not null order by notified_at desc limit $(N)" && \
+	if [ -n "$(RAW)" ]; then \
+		sqlite3 $$tmp "select url from jobs where notified_at is not null order by notified_at desc limit $(N)"; \
+	else \
+		w=$$(tput cols 2>/dev/null || echo 100); t=$$((w - 42)); \
+		if [ $$t -lt 30 ]; then t=30; fi; \
+		sqlite3 $$tmp "select printf('%-16s  %-20s ', substr(datetime(notified_at,'unixepoch','localtime'),1,16), substr(company,1,20)) || char(27) || ']8;;' || url || char(7) || substr(title,1,$$t) || char(27) || ']8;;' || char(7) from jobs where notified_at is not null order by notified_at desc limit $(N)"; \
+	fi; \
 	rm -f $$tmp
 
 clean:
