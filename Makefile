@@ -49,7 +49,12 @@ deploy:
 # terminal hyperlink (ctrl+click to open), so the raw url never gets
 # printed. workday urls run 150+ chars and used to wrap across rows,
 # which broke both clicking and copy/paste. needs local sqlite3.
-# override the count with N=30, or RAW=1 to print bare urls instead
+# override the count with N=30, or RAW=1 to print bare urls instead.
+#
+# the escapes come from shell printf, NOT sqlite: sqlite 3.47+ rewrites
+# control chars in its output as caret notation (^[) so a malicious db
+# can't drive your terminal, which quietly defeats char(27). url reads
+# first so a stray tab in a title can only mangle the title
 links:
 	@test -n "$(DEPLOY_HOST)" || (echo "set DEPLOY_HOST=user@host" && exit 1)
 	@tmp=$$(mktemp) && scp -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
@@ -58,7 +63,11 @@ links:
 	else \
 		w=$$(tput cols 2>/dev/null || echo 100); t=$$((w - 42)); \
 		if [ $$t -lt 30 ]; then t=30; fi; \
-		sqlite3 $$tmp "select printf('%-16s  %-20s ', substr(datetime(notified_at,'unixepoch','localtime'),1,16), substr(company,1,20)) || char(27) || ']8;;' || url || char(7) || substr(title,1,$$t) || char(27) || ']8;;' || char(7) from jobs where notified_at is not null order by notified_at desc limit $(N)"; \
+		tab=$$(printf '\t'); \
+		sqlite3 -separator "$$tab" $$tmp "select url, substr(datetime(notified_at,'unixepoch','localtime'),1,16), substr(company,1,20), substr(title,1,$$t) from jobs where notified_at is not null order by notified_at desc limit $(N)" \
+		| while IFS="$$tab" read -r url ts co ti; do \
+			printf '%-16s  %-20s \033]8;;%s\a%s\033]8;;\a\n' "$$ts" "$$co" "$$url" "$$ti"; \
+		done; \
 	fi; \
 	rm -f $$tmp
 
