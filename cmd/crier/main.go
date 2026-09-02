@@ -367,12 +367,19 @@ func sirenSet(companies []string) map[string]bool {
 	}
 	return set
 }
+var newGradTitle = regexp.MustCompile(`(?i)\bnew[\s\-]*grad(uate)?s?\b`)
+
+// isSiren decides emergency vs normal ping. company must already be
+// resolved through display_names, the list is written in pretty names
+func isSiren(siren map[string]bool, company, title string) bool {
+	return siren[strings.ToLower(company)] || newGradTitle.MatchString(title)
+}
 
 // dispatch sends (or logs, or suppresses) the collected alerts and
 // stamps notified_at on every alert that was handled. jobs that fail
 // to send stay unstamped and ride the backlog next tick.
-// priority-company matches go out as sirens (pushover emergency,
-// through dnd), everything else as a normal ping
+// priority-company matches and new-grad titles go out as sirens
+// (pushover emergency, through dnd), everything else as a normal ping
 func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 	names map[string]string, siren map[string]bool, alerts []alert, dryRun, seedRun bool) error {
 
@@ -383,7 +390,7 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 	}
 	sirens := 0
 	for _, a := range alerts {
-		if siren[strings.ToLower(displayName(names, a.job.Company))] {
+		if isSiren(siren, displayName(names, a.job.Company), a.job.Title) {
 			sirens++
 		}
 	}
@@ -393,7 +400,7 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 			log.Info("suppressed (dry-run/seed), would notify",
 				"company", a.job.Company, "title", a.job.Title,
 				"location", a.job.Location, "url", a.job.URL,
-				"siren", siren[strings.ToLower(displayName(names, a.job.Company))])
+				"siren", isSiren(siren, displayName(names, a.job.Company), a.job.Title))
 			// stamped so these don't flood the backlog on the next
 			// real tick, a dry or seed run counts as handled
 			stamp(a.key)
@@ -413,7 +420,7 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 		j := a.job
 		j.Company = displayName(names, j.Company)
 		p := notify.Normal
-		if !burst && siren[strings.ToLower(j.Company)] {
+		if !burst && isSiren(siren, j.Company, j.Title) {
 			p = notify.Emergency
 		}
 		if err := notifier.Notify(j, p); err != nil {

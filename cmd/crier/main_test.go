@@ -29,6 +29,42 @@ func TestSirenLookup(t *testing.T) {
 	}
 }
 
+// a "new grad" title sirens on its own, no matter who posted it.
+// every title here is real, straight out of the prod db
+func TestNewGradSirens(t *testing.T) {
+	names := map[string]string{"openai": "OpenAI"}
+	siren := sirenSet([]string{"OpenAI"})
+
+	tests := []struct {
+		company string
+		title   string
+		want    bool
+		why     string
+	}{
+		{"katalyst", "Agentic Engineer New Grad", true, "plain new grad, unlisted company"},
+		{"jhuapl", "Applied Algorithms Engineer New Grad", true, "same"},
+		{"acme", "New-Grad Software Engineer", true, "hyphenated"},
+		{"acme", "Software Engineer, New Grads", true, "plural"},
+		{"acme", "Software Engineer New Graduate", true, "spelled out"},
+		{"openai", "Software Engineer", true, "priority company, no new grad"},
+		{"openai", "Backend Engineer New Grad", true, "both, still one siren"},
+		// tiktok and bytedance say "Graduate" for their new grad roles.
+		// matching that bare word would siren university staff jobs, so
+		// it stays out on purpose
+		{"tiktok", "AI Engineer Graduate Level", false, "graduate alone is not new grad"},
+		{"jhuapl", "Academic Graduate Appointee - Data Acquisition Software Development", false,
+			"real university job that alerted, must stay a normal ping"},
+		{"stripe", "Software Engineer II", false, "ordinary role, unlisted company"},
+	}
+	for _, tt := range tests {
+		got := isSiren(siren, displayName(names, tt.company), tt.title)
+		if got != tt.want {
+			t.Errorf("isSiren(%q, %q) = %v, want %v (%s)",
+				tt.company, tt.title, got, tt.want, tt.why)
+		}
+	}
+}
+
 // every case here is a real url from the prod db
 func TestReqID(t *testing.T) {
 	tests := []struct {

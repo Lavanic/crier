@@ -77,9 +77,23 @@ links:
 		rows=$$(printf '%s\n' "$$q" | sqlite3 -separator "$$tab" $$tmp); rm -f $$tmp; \
 	fi; \
 	if [ -n "$(RAW)" ]; then printf '%s\n' "$$rows"; else \
-		printf '%s\n' "$$rows" | while IFS="$$tab" read -r url unix co ti; do \
-			printf '%-16s  %-20s \033]8;;%s\a%s\033]8;;\a\n' \
-				"$$(date -d @$$unix '+%Y-%m-%d %H:%M')" "$$co" "$$url" "$$ti"; \
+		red=""; rst=""; \
+		if [ -t 1 ]; then red=$$(printf '\033[1;31m'); rst=$$(printf '\033[0m'); fi; \
+		cfg=config.yaml; [ -f $$cfg ] || cfg=/dev/null; \
+		printf '%s\n' "$$rows" | awk -F'\t' -v CFG=$$cfg ' \
+			FILENAME==CFG{ \
+				if($$0~/^priority_companies:/){b="p";next} \
+				if($$0~/^display_names:/){b="d";next} \
+				if($$0~/^[A-Za-z_]+:/){b="";next} \
+				if(b=="p"&&$$0~/^[ \t]*-/){v=$$0;sub(/^[ \t]*-[ \t]*/,"",v);sub(/[ \t]*#.*/,"",v);sub(/[ \t]+$$/,"",v);if(v!="")P[tolower(v)]=1} \
+				if(b=="d"&&$$0~/^[ \t]*[^ \t#-][^:]*:/){k=$$0;sub(/:.*/,"",k);gsub(/[ \t"]/,"",k);v=$$0;sub(/^[^:]*:[ \t]*/,"",v);sub(/[ \t]*#.*/,"",v);sub(/[ \t]+$$/,"",v);gsub(/"/,"",v);if(k!="")D[tolower(k)]=v} \
+				next} \
+			{c=tolower($$3);n=(c in D)?tolower(D[c]):c; \
+			 print (((n in P)||(tolower($$4)~/(^|[^a-z0-9])new[ -]*grad/))?1:0)"\t"$$0}' $$cfg - \
+		| while IFS="$$tab" read -r crit url unix co ti; do \
+			s=""; e=""; if [ "$$crit" = 1 ]; then s="$$red"; e="$$rst"; fi; \
+			printf '%s%-16s  %-20s \033]8;;%s\a%s\033]8;;\a%s\n' \
+				"$$s" "$$(date -d @$$unix '+%Y-%m-%d %H:%M')" "$$co" "$$url" "$$ti" "$$e"; \
 		done; \
 	fi
 
