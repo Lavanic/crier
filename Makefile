@@ -54,22 +54,34 @@ deploy:
 # the escapes come from shell printf, NOT sqlite: sqlite 3.47+ rewrites
 # control chars in its output as caret notation (^[) so a malicious db
 # can't drive your terminal, which quietly defeats char(27). url reads
-# first so a stray tab in a title can only mangle the title
+# first so a stray tab in a title can only mangle the title.
+#
+# the query runs ON the server when it has sqlite3, so only a few kb of
+# rows come back. the fallback copies the whole db, which is ~35s once
+# it passes 15mb and gets worse every week. times come back as unix
+# ints and get formatted here, else they'd show the droplet's timezone
 links:
 	@test -n "$(DEPLOY_HOST)" || (echo "set DEPLOY_HOST=user@host" && exit 1)
-	@tmp=$$(mktemp) && scp -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
+	@w=$$(tput cols 2>/dev/null || echo 100); t=$$((w - 42)); \
+	if [ $$t -lt 30 ]; then t=30; fi; \
 	if [ -n "$(RAW)" ]; then \
-		sqlite3 $$tmp "select url from jobs where notified_at is not null order by notified_at desc limit $(N)"; \
+		q="select url from jobs where notified_at is not null order by notified_at desc limit $(N);"; \
 	else \
-		w=$$(tput cols 2>/dev/null || echo 100); t=$$((w - 42)); \
-		if [ $$t -lt 30 ]; then t=30; fi; \
-		tab=$$(printf '\t'); \
-		sqlite3 -separator "$$tab" $$tmp "select url, substr(datetime(notified_at,'unixepoch','localtime'),1,16), substr(company,1,20), substr(title,1,$$t) from jobs where notified_at is not null order by notified_at desc limit $(N)" \
-		| while IFS="$$tab" read -r url ts co ti; do \
-			printf '%-16s  %-20s \033]8;;%s\a%s\033]8;;\a\n' "$$ts" "$$co" "$$url" "$$ti"; \
-		done; \
+		q="select url, notified_at, substr(company,1,20), substr(title,1,$$t) from jobs where notified_at is not null order by notified_at desc limit $(N);"; \
 	fi; \
-	rm -f $$tmp
+	tab=$$(printf '\t'); \
+	if rows=$$(printf '%s\n' "$$q" | ssh $(DEPLOY_HOST) "sqlite3 -separator '$$tab' /opt/crier/crier.db" 2>/dev/null); then :; else \
+		echo "no sqlite3 on the server, copying the db instead (slow)." >&2; \
+		echo "one-time fix: ssh $(DEPLOY_HOST) apt-get install -y sqlite3" >&2; \
+		tmp=$$(mktemp) && scp -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
+		rows=$$(printf '%s\n' "$$q" | sqlite3 -separator "$$tab" $$tmp); rm -f $$tmp; \
+	fi; \
+	if [ -n "$(RAW)" ]; then printf '%s\n' "$$rows"; else \
+		printf '%s\n' "$$rows" | while IFS="$$tab" read -r url unix co ti; do \
+			printf '%-16s  %-20s \033]8;;%s\a%s\033]8;;\a\n' \
+				"$$(date -d @$$unix '+%Y-%m-%d %H:%M')" "$$co" "$$url" "$$ti"; \
+		done; \
+	fi
 
 clean:
 	rm -rf $(BINARY) dist/
