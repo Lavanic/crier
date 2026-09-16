@@ -367,12 +367,18 @@ func sirenSet(companies []string) map[string]bool {
 	}
 	return set
 }
-var newGradTitle = regexp.MustCompile(`(?i)\bnew[\s\-]*grad(uate)?s?\b`)
+
+var cohortTitle = regexp.MustCompile(`(?i)\b(new[\s\-]*grad(uate)?s?|graduate|early[\s\-]*career)\b`)
+var notMyCohort = regexp.MustCompile(`(?i)(\bgraduate\s+(student|assistant|appointee|fellow|research\s+assistant)\b|\brecruit(er|ing|ment)\b|\btalent\s+acquisition\b|\bpeople\s+(strategy|operations)\b|\bsales\b)`)
 
 // isSiren decides emergency vs normal ping. company must already be
 // resolved through display_names, the list is written in pretty names
 func isSiren(siren map[string]bool, company, title string) bool {
-	return siren[strings.ToLower(company)] || newGradTitle.MatchString(title)
+	prio := siren[strings.ToLower(company)]
+	if notMyCohort.MatchString(title) {
+		return prio
+	}
+	return prio || cohortTitle.MatchString(title)
 }
 
 // dispatch sends (or logs, or suppresses) the collected alerts and

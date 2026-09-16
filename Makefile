@@ -94,8 +94,10 @@ links:
 				if(b=="p"&&$$0~/^[ \t]*-/){v=$$0;sub(/^[ \t]*-[ \t]*/,"",v);sub(/[ \t]*#.*/,"",v);sub(/[ \t]+$$/,"",v);if(v!="")P[tolower(v)]=1} \
 				if(b=="d"&&$$0~/^[ \t]*[^ \t#-][^:]*:/){k=$$0;sub(/:.*/,"",k);gsub(/[ \t"]/,"",k);v=$$0;sub(/^[^:]*:[ \t]*/,"",v);sub(/[ \t]*#.*/,"",v);sub(/[ \t]+$$/,"",v);gsub(/"/,"",v);if(k!="")D[tolower(k)]=v} \
 				next} \
-			{c=tolower($$3);n=(c in D)?tolower(D[c]):c; \
-			 print (((n in P)||(tolower($$4)~/(^|[^a-z0-9])new[ -]*grad/))?1:0)"\t"$$0}' $$cfg - \
+			{c=tolower($$3);n=(c in D)?tolower(D[c]):c;t=tolower($$4); \
+			 bad=(t~/graduate (student|assistant|appointee|fellow)|graduate research assistant|recruit(er|ing|ment)|talent acquisition|people (strategy|operations)|sales/); \
+			 coh=(t~/(^|[^a-z0-9])(new[ -]*grad|graduate|early[ -]*career)/); \
+			 print (((n in P)||(coh&&!bad))?1:0)"\t"$$0}' $$cfg - \
 		| while IFS="$$tab" read -r crit url unix co ti; do \
 			[ -n "$$unix" ] || continue; \
 			s=""; e=""; if [ "$$crit" = 1 ]; then s="$$red"; e="$$rst"; fi; \

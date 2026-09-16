@@ -29,9 +29,9 @@ func TestSirenLookup(t *testing.T) {
 	}
 }
 
-// a "new grad" title sirens on its own, no matter who posted it.
-// every title here is real, straight out of the prod db
-func TestNewGradSirens(t *testing.T) {
+// a title aimed at my cohort sirens on its own, no matter who posted
+// it. every title here is real, straight out of the prod db
+func TestCohortSirens(t *testing.T) {
 	names := map[string]string{"openai": "OpenAI"}
 	siren := sirenSet([]string{"OpenAI"})
 
@@ -41,19 +41,34 @@ func TestNewGradSirens(t *testing.T) {
 		want    bool
 		why     string
 	}{
+		// new grad, all the spellings
 		{"katalyst", "Agentic Engineer New Grad", true, "plain new grad, unlisted company"},
-		{"jhuapl", "Applied Algorithms Engineer New Grad", true, "same"},
 		{"acme", "New-Grad Software Engineer", true, "hyphenated"},
 		{"acme", "Software Engineer, New Grads", true, "plural"},
 		{"acme", "Software Engineer New Graduate", true, "spelled out"},
-		{"openai", "Software Engineer", true, "priority company, no new grad"},
-		{"openai", "Backend Engineer New Grad", true, "both, still one siren"},
-		// tiktok and bytedance say "Graduate" for their new grad roles.
-		// matching that bare word would siren university staff jobs, so
-		// it stays out on purpose
-		{"tiktok", "AI Engineer Graduate Level", false, "graduate alone is not new grad"},
+		// bare "graduate", how tiktok/bytedance and the uk schemes name theirs
+		{"tiktok", "Machine Learning Engineer Graduate", true, "tiktok's new grad naming"},
+		{"bytedance", "Software Engineer Graduate - Dev Infra", true, "same"},
+		{"spacex", "Graduate Engineer - Software", true, "graduate leading"},
+		{"ti", "New College Graduate - Information Technology", true, "new college graduate"},
+		{"bytedance", "Graduate Research Engineer - Seed Infra", true,
+			"real role, must survive the graduate-research-assistant guard"},
+		// early career
+		{"notion", "Software Engineer, Early Career", true, "early career"},
+		{"affirm", "Software Engineer - Early Career", true, "dashed"},
+		{"hitachi", "Python Engineer - Early-Career", true, "hyphenated"},
+		// priority company wins regardless
+		{"openai", "Software Engineer", true, "priority company, no cohort word"},
+		{"openai", "Head of Early Career Recruiting", true, "priority beats the guard"},
+		// same words, wrong job. these still alert, just not as sirens
+		{"arkansas", "Graduate Research Assistant - Machine Learning", false, "university post"},
 		{"jhuapl", "Academic Graduate Appointee - Data Acquisition Software Development", false,
-			"real university job that alerted, must stay a normal ping"},
+			"university job that really alerted"},
+		{"sphere", "Sphere Technology Operations Graduate Student Associate Program", false,
+			"grad student program"},
+		{"notion", "Head of Early Career Recruiting", false, "recruiter for the program"},
+		{"notion", "People Strategy & Operations, Early Career", false, "hr role"},
+		{"gusto", "Future Opportunities: Early Career Sales Talent", false, "sales"},
 		{"stripe", "Software Engineer II", false, "ordinary role, unlisted company"},
 	}
 	for _, tt := range tests {
