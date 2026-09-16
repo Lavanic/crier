@@ -70,10 +70,16 @@ links:
 		q="select url, notified_at, substr(company,1,20), substr(title,1,$$t) from jobs where notified_at is not null order by notified_at desc limit $(N);"; \
 	fi; \
 	tab=$$(printf '\t'); \
-	if rows=$$(printf '%s\n' "$$q" | ssh $(DEPLOY_HOST) "sqlite3 -separator '$$tab' /opt/crier/crier.db" 2>/dev/null); then :; else \
-		echo "no sqlite3 on the server, copying the db instead (slow)." >&2; \
-		echo "one-time fix: ssh $(DEPLOY_HOST) apt-get install -y sqlite3" >&2; \
-		tmp=$$(mktemp) && scp -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
+	rows=$$(printf '%s\n' "$$q" | ssh -o ConnectTimeout=10 $(DEPLOY_HOST) \
+		"sqlite3 -separator '$$tab' /opt/crier/crier.db" 2>/dev/null); rc=$$?; \
+	if [ $$rc -eq 255 ]; then \
+		echo "cannot reach $(DEPLOY_HOST): ssh failed (exit 255)." >&2; \
+		echo "the box is down or wedged, copying the db would fail too. check the provider console." >&2; \
+		exit 1; \
+	elif [ $$rc -ne 0 ]; then \
+		echo "server query failed (exit $$rc), copying the db instead (slow)." >&2; \
+		echo "if sqlite3 is missing: ssh $(DEPLOY_HOST) apt-get install -y sqlite3" >&2; \
+		tmp=$$(mktemp) && scp -o ConnectTimeout=10 -q $(DEPLOY_HOST):/opt/crier/crier.db $$tmp && \
 		rows=$$(printf '%s\n' "$$q" | sqlite3 -separator "$$tab" $$tmp); rm -f $$tmp; \
 	fi; \
 	if [ -n "$(RAW)" ]; then printf '%s\n' "$$rows"; else \
@@ -91,6 +97,7 @@ links:
 			{c=tolower($$3);n=(c in D)?tolower(D[c]):c; \
 			 print (((n in P)||(tolower($$4)~/(^|[^a-z0-9])new[ -]*grad/))?1:0)"\t"$$0}' $$cfg - \
 		| while IFS="$$tab" read -r crit url unix co ti; do \
+			[ -n "$$unix" ] || continue; \
 			s=""; e=""; if [ "$$crit" = 1 ]; then s="$$red"; e="$$rst"; fi; \
 			printf '%s%-16s  %-20s \033]8;;%s\a%s\033]8;;\a%s\n' \
 				"$$s" "$$(date -d @$$unix '+%Y-%m-%d %H:%M')" "$$co" "$$url" "$$ti" "$$e"; \
