@@ -368,7 +368,7 @@ func sirenSet(companies []string) map[string]bool {
 	return set
 }
 
-var cohortTitle = regexp.MustCompile(`(?i)\b(new[\s\-]*grad(uate)?s?|graduate|early[\s\-]*career)\b`)
+var cohortTitle = regexp.MustCompile(`(?i)\b(new[\s\-]*grad(uate)?s?|graduate|early[\s\-]*careers?|emerging[\s\-]*(talent|careers?))\b`)
 var notMyCohort = regexp.MustCompile(`(?i)(\bgraduate\s+(student|assistant|appointee|fellow|research\s+assistant)\b|\brecruit(er|ing|ment)\b|\btalent\s+acquisition\b|\bpeople\s+(strategy|operations)\b|\bsales\b)`)
 
 // isSiren decides emergency vs normal ping. company must already be

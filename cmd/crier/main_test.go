@@ -57,6 +57,17 @@ func TestCohortSirens(t *testing.T) {
 		{"notion", "Software Engineer, Early Career", true, "early career"},
 		{"affirm", "Software Engineer - Early Career", true, "dashed"},
 		{"hitachi", "Python Engineer - Early-Career", true, "hyphenated"},
+		{"abridge", "Software Engineer- Early Careers", true, "plural"},
+		// emerging talent/careers is how sas, salesforce and anduril name theirs
+		{"sas", "Software Developer - Emerging Careers", true, "emerging careers"},
+		{"salesforce", "AI Builder - Emerging Talent", true, "emerging talent"},
+		{"verse", "Software Engineer - Full Stack - Emerging Talent", true, "same"},
+		{"openai2", "Full-Stack Software Engineer, Emerging Products", false,
+			"emerging products is a team, not a cohort"},
+		{"databricks", "Emerging Enterprise Account Executive", false, "business segment"},
+		{"apple2", "Emerging Display Technologist", false, "same"},
+		{"elastic", "Sales Development Representative Emerging Talent - Austin, TX", false,
+			"sales role wearing the cohort words"},
 		// priority company wins regardless
 		{"openai", "Software Engineer", true, "priority company, no cohort word"},
 		{"openai", "Head of Early Career Recruiting", true, "priority beats the guard"},

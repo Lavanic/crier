@@ -96,7 +96,7 @@ links:
 				next} \
 			{c=tolower($$3);n=(c in D)?tolower(D[c]):c;t=tolower($$4); \
 			 bad=(t~/graduate (student|assistant|appointee|fellow)|graduate research assistant|recruit(er|ing|ment)|talent acquisition|people (strategy|operations)|sales/); \
-			 coh=(t~/(^|[^a-z0-9])(new[ -]*grad|graduate|early[ -]*career)/); \
+			 coh=(t~/(^|[^a-z0-9])(new[ -]*grad|graduate|early[ -]*career|emerging[ -]*(talent|career))/); \
 			 print (((n in P)||(coh&&!bad))?1:0)"\t"$$0}' $$cfg - \
 		| while IFS="$$tab" read -r crit url unix co ti; do \
 			[ -n "$$unix" ] || continue; \
