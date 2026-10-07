@@ -1,30 +1,21 @@
 package main
 
 import (
-	"strings"
 	"testing"
 )
 
-func TestSirenLookup(t *testing.T) {
+func TestDisplayName(t *testing.T) {
 	names := map[string]string{"wehrtyou": "HRT", "openai": "OpenAI"}
-	siren := sirenSet([]string{"OpenAI", "Google", "HRT", "Hudson River Trading"})
-
-	tests := []struct {
-		company string
-		want    bool
-	}{
-		{"openai", true},   // board slug, mapped by display_names
-		{"wehrtyou", true}, // ugly slug that maps to HRT
-		{"Google", true},   // feed display name
-		{"GOOGLE", true},   // case must not matter
-		{"Hudson River Trading", true},
-		{"stripe", false},
-		{"Googler Staffing LLC", false}, // exact match only, no substrings
-	}
-	for _, tt := range tests {
-		got := siren[strings.ToLower(displayName(names, tt.company))]
-		if got != tt.want {
-			t.Errorf("siren lookup for %q = %v, want %v", tt.company, got, tt.want)
+	for _, tt := range []struct{ in, want string }{
+		{"openai", "OpenAI"},
+		{"wehrtyou", "HRT"},
+		// unmapped single-word slugs get capitalised so a lock screen
+		// doesn't read "stripe"
+		{"stripe", "Stripe"},
+		{"Rocket Lab", "Rocket Lab"},
+	} {
+		if got := displayName(names, tt.in); got != tt.want {
+			t.Errorf("displayName(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
@@ -32,9 +23,6 @@ func TestSirenLookup(t *testing.T) {
 // a title aimed at my cohort sirens on its own, no matter who posted
 // it. every title here is real, straight out of the prod db
 func TestCohortSirens(t *testing.T) {
-	names := map[string]string{"openai": "OpenAI"}
-	siren := sirenSet([]string{"OpenAI"})
-
 	tests := []struct {
 		company string
 		title   string
@@ -68,9 +56,9 @@ func TestCohortSirens(t *testing.T) {
 		{"apple2", "Emerging Display Technologist", false, "same"},
 		{"elastic", "Sales Development Representative Emerging Talent - Austin, TX", false,
 			"sales role wearing the cohort words"},
-		// priority company wins regardless
-		{"openai", "Software Engineer", true, "priority company, no cohort word"},
-		{"openai", "Head of Early Career Recruiting", true, "priority beats the guard"},
+		// the company is irrelevant now, only the cohort words count
+		{"openai", "Software Engineer", false, "priority company no longer sirens on its own"},
+		{"stripe", "Senior Software Engineer", false, "same"},
 		// same words, wrong job. these still alert, just not as sirens
 		{"arkansas", "Graduate Research Assistant - Machine Learning", false, "university post"},
 		{"jhuapl", "Academic Graduate Appointee - Data Acquisition Software Development", false,
@@ -83,7 +71,7 @@ func TestCohortSirens(t *testing.T) {
 		{"stripe", "Software Engineer II", false, "ordinary role, unlisted company"},
 	}
 	for _, tt := range tests {
-		got := isSiren(siren, displayName(names, tt.company), tt.title)
+		got := isSiren(tt.title)
 		if got != tt.want {
 			t.Errorf("isSiren(%q, %q) = %v, want %v (%s)",
 				tt.company, tt.title, got, tt.want, tt.why)

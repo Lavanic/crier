@@ -46,11 +46,10 @@ const tickTimeout = 25 * time.Second
 // older than this that still failed to alert is stale enough to drop
 const backlogWindow = 24 * time.Hour
 
-// more matches than this in one tick means something bulk-merged
-// (aggregator catch-up, new source). individual alerts drop to normal
-// priority and ONE emergency digest fires, instead of N sirens each
-// re-buzzing every 30s until individually acked
-const maxEmergencyPerTick = 3
+// how many sirens may buzz individually in one tick. past this the
+// rest collapse into one digest, since each emergency re-buzzes every
+// 30s until acked and the aggregator feeds drop roles in clumps
+const maxEmergencyPerTick = 12
 
 // how far back to check if an alert was the same posting on another
 // portal, a week covers every repeat seen in the audit
@@ -255,7 +254,7 @@ func run(log *slog.Logger, configPath string, dryRun bool) error {
 	alerts = dropCrossPosts(log, st, cfg.DisplayNames, alerts)
 
 	notifyErr := dispatch(log, st, notifier, cfg.DisplayNames,
-		sirenSet(cfg.PriorityCompanies), alerts, dryRun, seedRun)
+		alerts, dryRun, seedRun)
 
 	if !seedRun {
 		warnStaleSources(log, st, notifier, now, sourceNames(srcs))
@@ -359,26 +358,13 @@ func reqID(rawURL string) string {
 	return rawURL
 }
 
-// sirenSet turns the priority_companies list into a lowercase lookup
-func sirenSet(companies []string) map[string]bool {
-	set := make(map[string]bool, len(companies))
-	for _, c := range companies {
-		set[strings.ToLower(strings.TrimSpace(c))] = true
-	}
-	return set
-}
-
-var cohortTitle = regexp.MustCompile(`(?i)\b(new[\s\-]*grad(uate)?s?|graduate|early[\s\-]*careers?|emerging[\s\-]*(talent|careers?))\b`)
+var cohortTitle = regexp.MustCompile(`(?i)\b(new[\s\-]*grad(uate)?s?|college[\s\-]*grad(uate)?s?|graduate|early[\s\-]*careers?|emerging[\s\-]*(talent|careers?))\b`)
 var notMyCohort = regexp.MustCompile(`(?i)(\bgraduate\s+(student|assistant|appointee|fellow|research\s+assistant)\b|\brecruit(er|ing|ment)\b|\btalent\s+acquisition\b|\bpeople\s+(strategy|operations)\b|\bsales\b)`)
 
-// isSiren decides emergency vs normal ping. company must already be
-// resolved through display_names, the list is written in pretty names
-func isSiren(siren map[string]bool, company, title string) bool {
-	prio := siren[strings.ToLower(company)]
-	if notMyCohort.MatchString(title) {
-		return prio
-	}
-	return prio || cohortTitle.MatchString(title)
+// isSiren decides emergency vs normal ping. only roles written for my
+// cohort siren, the company does not matter
+func isSiren(title string) bool {
+	return cohortTitle.MatchString(title) && !notMyCohort.MatchString(title)
 }
 
 // dispatch sends (or logs, or suppresses) the collected alerts and
@@ -387,7 +373,7 @@ func isSiren(siren map[string]bool, company, title string) bool {
 // priority-company matches and new-grad titles go out as sirens
 // (pushover emergency, through dnd), everything else as a normal ping
 func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
-	names map[string]string, siren map[string]bool, alerts []alert, dryRun, seedRun bool) error {
+	names map[string]string, alerts []alert, dryRun, seedRun bool) error {
 
 	stamp := func(key string) {
 		if err := st.MarkNotified(key, time.Now()); err != nil {
@@ -396,7 +382,7 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 	}
 	sirens := 0
 	for _, a := range alerts {
-		if isSiren(siren, displayName(names, a.job.Company), a.job.Title) {
+		if isSiren(a.job.Title) {
 			sirens++
 		}
 	}
@@ -406,7 +392,7 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 			log.Info("suppressed (dry-run/seed), would notify",
 				"company", a.job.Company, "title", a.job.Title,
 				"location", a.job.Location, "url", a.job.URL,
-				"siren", isSiren(siren, displayName(names, a.job.Company), a.job.Title))
+				"siren", isSiren(a.job.Title))
 			// stamped so these don't flood the backlog on the next
 			// real tick, a dry or seed run counts as handled
 			stamp(a.key)
@@ -414,20 +400,23 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 		return nil
 	}
 
-	// burst mode: too many sirens at once collapse into one emergency
-	// digest and the individuals all drop to normal
-	burst := sirens > maxEmergencyPerTick
-	if burst {
-		log.Warn("siren burst, downgrading individuals and sending one digest", "count", sirens)
+	// overflow only. the first maxEmergencyPerTick sirens still buzz
+	// individually, anything past that rides one digest instead of
+	// re-buzzing on its own for an hour
+	overflow := sirens > maxEmergencyPerTick
+	if overflow {
+		log.Warn("siren burst, digesting the overflow",
+			"sirens", sirens, "individual", maxEmergencyPerTick)
 	}
 
-	var failed int
+	var failed, sent int
 	for _, a := range alerts {
 		j := a.job
 		j.Company = displayName(names, j.Company)
 		p := notify.Normal
-		if !burst && isSiren(siren, j.Company, j.Title) {
+		if isSiren(j.Title) && sent < maxEmergencyPerTick {
 			p = notify.Emergency
+			sent++
 		}
 		if err := notifier.Notify(j, p); err != nil {
 			// loud but not fatal, unstamped rows retry via the backlog
@@ -440,8 +429,8 @@ func dispatch(log *slog.Logger, st *store.Store, notifier *notify.Notifier,
 			"siren", p == notify.Emergency, "url", j.URL)
 	}
 
-	if burst && len(alerts) > failed {
-		title := fmt.Sprintf("%d new job matches", len(alerts))
+	if overflow && len(alerts) > failed {
+		title := fmt.Sprintf("%d more new grad matches", sirens-sent)
 		if err := notifier.Send(title, digestBody(names, alerts), notify.Emergency); err != nil {
 			log.Error("digest send failed", "err", err)
 			failed++
