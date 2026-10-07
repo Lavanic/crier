@@ -461,6 +461,7 @@ display_names:
 sources:
   greenhouse:
     - stripe
+    - vercel
     - databricks
     - airbnb
     - doordashusa # plain "doordash" 404s now
@@ -482,7 +483,6 @@ sources:
     - gitlab
     - datadog
     - roblox
-    - fireworksai # their ashby board 404s, greenhouse is live
     - chime
     - robinhood
     - brex
@@ -506,7 +506,6 @@ sources:
     - squarepointcapital
     - oldmissioncapital
     # ai labs and ai infra
-    - deepmind
     - xai
     - togetherai
     - sambanovasystems
@@ -523,7 +522,6 @@ sources:
     - flyzipline # zipline, the drone delivery one
     - epirus
     - relativity # relativity space, verified (long beach rocket jobs)
-    - aurorainnovation # aurora, the self driving trucks one
     # fintech, devtools, big startups
     - mercury # the banking startup, verified not the insurance company
     - wizinc # plain "wiz" 404s
@@ -533,9 +531,7 @@ sources:
     - cockroachlabs
     - mongodb
     - elastic
-    - temporaltechnologies
     - grafanalabs
-    - clickhouse
     - tailscale
     - riotgames
     - epicgames
@@ -557,7 +553,6 @@ sources:
   # warp payroll startup, skipped rather than risk wrong-company alerts
   lever:
     - spotify
-    - mistral
     - Coda # capital C matters, lowercase 404s
     - palantir # "palantirtechnologies" on greenhouse 404s
     - shieldai
@@ -565,8 +560,11 @@ sources:
     - belvederetrading # belvedere, chicago quant
   ashby:
     - ramp
+    - fireworks
+    - temporal
+    - clickhouse
+    - thinkingmachines
     - linear
-    - vercel # valid board but 0 listed jobs as of 2026-07, expect the WARN
     - supabase
     - perplexity
     - cursor
@@ -608,7 +606,6 @@ sources:
     - vanta
     - handshake # the campus recruiting company, they hire new grads too
     - blissway
-    - thinking-machines-lab # 0 jobs listed as of 2026-07, expect the WARN
   github:
     - name: simplifyjobs
       url: https://raw.githubusercontent.com/SimplifyJobs/New-Grad-Positions/dev/.github/scripts/listings.json
